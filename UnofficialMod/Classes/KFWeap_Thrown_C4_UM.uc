@@ -63,6 +63,9 @@ var const Color PendingLockColor, LockedOnColor;
 /** Ideal locked on C4 texture size */
 var const float LockOnC4IconSize;
 
+/** Custom STraderItem, used to fix ammo bugs */
+var KFGFxObject_TraderItems.STraderItem CustomSTraderItem;
+
 replication
 {
 	if (bNetDirty && Role == ROLE_Authority)
@@ -71,6 +74,10 @@ replication
 
 simulated event PreBeginPlay()
 {
+	// Do this first, because KFWeapon's PreBeginPlay()
+	// initializes ammo capacity
+	class'UnofficialMod.UMClientConfig'.static.GetCustomSTraderItemFor(class'KFGame.KFWeapDef_C4', CustomSTraderItem);
+
 	super.PreBeginPlay();
 
 	LockRangeSq = Square(LockRange);
@@ -387,20 +394,60 @@ simulated function PrepareAndDetonate()
 		SetTimer(AnimDuration * 0.5f, false, nameof(GotoActiveState));
 }
 
-/** Fixes a bug that grants extra current/spare ammo to C4 with Extra Ammo perk skill
+/** Fixes bugs that grant extra current/spare ammo to C4 with Extra Ammo perk skill
 	This is due to the superclass being excluded from this modification in the
 	perk, but since it relies on exact class name, this one isn't excluded
 	NOTE: this doesn't work for the weapon in the Trader UI when initially bought,
 	only for in-game amounts. Other classes handle the Trader UI bugs */
-simulated function InitializeAmmoCapacity(optional int UpgradeIndex = INDEX_NONE, optional KFPerk CurrentPerk)
+function InitializeAmmo()
 {
-	super.InitializeAmmoCapacity(UpgradeIndex, CurrentPerk);
+	// Copy/paste modified
+	local KFPerk CurrentPerk;
 
-	if (KFPerk_Demolitionist(GetPerk()) != None && KFPerk_Demolitionist(GetPerk()).IsAmmoActive())
+	InitializeAmmoCapacity();
+
+	AmmoCount[0] = MagazineCapacity[0];
+	AmmoCount[1] = MagazineCapacity[1];
+
+	AddAmmo(default.InitialSpareMags[0] * default.MagazineCapacity[0]);
+
+	CurrentPerk = GetPerk();
+	if (CurrentPerk != none)
 	{
-		SpareAmmoCapacity[0] -= 5;
-		AddAmmo(0);
-		bForceNetUpdate = true;
+		// Hard check for Demo to use custom STraderItem
+		if (KFPerk_Demolitionist(CurrentPerk) != None)
+			CurrentPerk.ModifySpareAmmoAmount(None, SpareAmmoCount[DEFAULT_FIREMODE], CustomSTraderItem);
+		else
+			CurrentPerk.ModifySpareAmmoAmount(self, SpareAmmoCount[DEFAULT_FIREMODE]);
+
+		CurrentPerk.ModifySpareAmmoAmount(self, SpareAmmoCount[ALTFIRE_FIREMODE], , true);
+	}
+
+	// HACK: Finalize our spare ammo values
+	AddAmmo(0);
+
+	bForceNetUpdate	= TRUE;
+}
+
+/** Same as above */
+simulated function ModifySpareAmmoCapacity(out int InSpareAmmo, optional int FireMode = DEFAULT_FIREMODE, optional int UpgradeIndex = INDEX_NONE, optional KFPerk CurrentPerk)
+{
+	// Copy/paste modified
+	if (FireMode == BASH_FIREMODE)
+		return;
+
+	InSpareAmmo = GetUpgradedSpareAmmoCapacity(FireMode, UpgradeIndex);
+
+	if (CurrentPerk == none)
+		CurrentPerk = GetPerk();
+
+	if (CurrentPerk != none)
+	{
+		// Hard check for Demo to use custom STraderItem
+		if (KFPerk_Demolitionist(CurrentPerk) != None)
+			CurrentPerk.ModifyMaxSpareAmmoAmount(None, InSpareAmmo, CustomSTraderItem, FireMode == ALTFIRE_FIREMODE);
+		else
+			CurrentPerk.ModifyMaxSpareAmmoAmount(self, InSpareAmmo,, FireMode == ALTFIRE_FIREMODE);
 	}
 }
 

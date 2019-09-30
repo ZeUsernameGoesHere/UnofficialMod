@@ -9,14 +9,9 @@ class KFWeapDef_M16M203_UM extends KFWeapDef_M16M203
 	abstract;
 
 /** Workaround for potentially missing INT file */
-static function string GetItemName()
+static function string GetItemLocalization(string KeyName)
 {
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponName(default.class, class'KFGame.KFWeapDef_M16M203');
-}
-
-static function string GetItemDescription()
-{
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponDesc(default.class, class'KFGame.KFWeapDef_M16M203');
+	return class'UnofficialMod.UMClientConfig'.static.GetWeaponLocalization(KeyName, default.class, class'KFGame.KFWeapDef_M16M203');
 }
 
 defaultproperties

@@ -9,14 +9,9 @@ class KFWeapDef_C4_UM extends KFWeapDef_C4
 	abstract;
 
 /** Workaround for potentially missing INT file */
-static function string GetItemName()
+static function string GetItemLocalization(string KeyName)
 {
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponName(default.class, class'KFGame.KFWeapDef_C4');
-}
-
-static function string GetItemDescription()
-{
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponDesc(default.class, class'KFGame.KFWeapDef_C4');
+	return class'UnofficialMod.UMClientConfig'.static.GetWeaponLocalization(KeyName, default.class, class'KFGame.KFWeapDef_C4');
 }
 
 defaultproperties

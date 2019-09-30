@@ -37,39 +37,39 @@ var const KFGFxObject_TraderItems UMTraderItems, UMTraderItemsBeta;
 
 /** Config version, incremented when new settings are
 	added so that config can be saved with new defaults*/
-var config int INIVersion;
+var globalconfig int INIVersion;
 
 /** Disable weapon upgrades */
-var config bool bDisableWeaponUpgrades;
+var globalconfig bool bDisableWeaponUpgrades;
 
 /** Start without Tier 1 weapons */
-var config bool bStartWithoutTier1Weapons;
+var globalconfig bool bStartWithoutTier1Weapons;
 
 /** KF1-style syringe (50% ammo use for healing
 	teammates, 15sec recharge regardless of firemode) */
-var config bool bKF1StyleSyringe;
+var globalconfig bool bKF1StyleSyringe;
 
 /** Disable random map objectives (e.g. Stand Your Ground) */
-var config bool bDisableRandomMapObjectives;
+var globalconfig bool bDisableRandomMapObjectives;
 
 /** Max failed kick vote attempts ( <= 0 disables this ) */
-var config int MaxFailedKickVoteAttempts;
+var globalconfig int MaxFailedKickVoteAttempts;
 
 /** Kick player for attempting and failing too many kick votes
 	(if false, it just prevents them from attempting any more) */
-var config bool bKickFailedVoteInitiator;
+var globalconfig bool bKickFailedVoteInitiator;
 
 /** TODO: [DEPRECATED] Give speed boost when perk knife is equipped
 	0 disables this
 	1 hard-caps the speed increase (i.e. only for slower perks)
 	2 enables this for all perks */
-var config byte PerkKnifeSpeedBoostLevel;
+var globalconfig byte PerkKnifeSpeedBoostLevel;
 
 /** Additional Trader time given once per
 	wave for players who join mid-game
 	NOTE: time added will not make Trader time
 	exceed map/difficulty default Trader time*/
-var config int MidGameJoinerTraderTime;
+var globalconfig int MidGameJoinerTraderTime;
 
 /** For the two below config settings:
 	0 disables weapon upgrades
@@ -77,7 +77,7 @@ var config int MidGameJoinerTraderTime;
 	<0 enables all upgrades EXCEPT for that many (i.e. -1 prevents upgrading to Tier 5)
 	NOTE: These settings are ignored if bDisableWeaponUpgrades==true */
 /** Default maximum number of weapon upgrades */
-var config int DefaultWeaponUpgradeLevel;
+var globalconfig int DefaultWeaponUpgradeLevel;
 
 /** Weapon upgrade override for specific weapons */
 struct WeaponUpgradeOverrideInfo
@@ -91,7 +91,7 @@ struct WeaponUpgradeOverrideInfo
 };
 
 /** List of weapon-specific upgrade overrides */
-var config array<WeaponUpgradeOverrideInfo> WeaponUpgradeOverrides;
+var globalconfig array<WeaponUpgradeOverrideInfo> WeaponUpgradeOverrides;
 
 /** Gameplay-affecting weapons */
 struct GameplayWeaponInfo
@@ -103,10 +103,10 @@ struct GameplayWeaponInfo
 };
 
 /** List of gameplay-affecting weapons */
-var config array<GameplayWeaponInfo> GameplayWeapons;
+var globalconfig array<GameplayWeaponInfo> GameplayWeapons;
 
 /** Disable picking up others' weapons */
-var config bool bDisableOthersWeaponsPickup;
+var globalconfig bool bDisableOthersWeaponsPickup;
 
 /** Perk knife speed boost */
 struct PerkKnifeSpeedBoostInfo
@@ -118,10 +118,10 @@ struct PerkKnifeSpeedBoostInfo
 };
 
 /** Perk knife speed boost during wave */
-var config PerkKnifeSpeedBoostInfo PerkKnifeSpeedBoostWave;
+var globalconfig PerkKnifeSpeedBoostInfo PerkKnifeSpeedBoostWave;
 
 /** Perk knife speed boost during Trader time */
-var config PerkKnifeSpeedBoostInfo PerkKnifeSpeedBoostTrader;
+var globalconfig PerkKnifeSpeedBoostInfo PerkKnifeSpeedBoostTrader;
 
 /** Information for PRIs who have had a Tier 1 weapon
 	removed from them on their first life so we can
@@ -164,6 +164,9 @@ var const array<CustomTraderHelperInfo> CustomTraderHelperList;
 	weapons if config option is set */
 var const array< class<KFWeapon> > Tier1Weapons;
 
+/** Client config class */
+var class<UMClientConfig> ClientConfigClass;
+
 /** Client config */
 var UMClientConfig ClientConfig;
 
@@ -187,6 +190,23 @@ struct FriendPRIInfo
 /** List of Steam friend infos */
 var array<FriendPRIInfo> FriendPRIInfoList;
 
+/** Custom mutator class paths
+	Used for compatibility while
+	minimizing package dependency */
+struct CustomMutatorInfo
+{
+	/** Class name of GameInfo/Mutator */
+	var name ClassName;
+	/** Is this a GameInfo? False means that this is a Mutator */
+	var bool bIsGameInfo;
+	/** Custom mutator class path
+		Loaded DynamicLoadObject() to avoid dependencies */
+	var string MutClassPath;
+};
+	
+/** List of custom mutator class paths */
+var const array<CustomMutatorInfo> CustomMutatorInfoList;
+
 /** Beta version check (used for things
 	like Trader list for new beta weapons)
 	NOTE: This is set to a very high number
@@ -199,9 +219,6 @@ var const int MaxWeaponUpgradeCount;
 /** Mod version */
 var const string ModVersion;
 
-/** Debugging */
-var bool bUMDebug;
-
 /** Cached value for IsInBeta() */
 var bool bIsInBeta;
 
@@ -209,52 +226,57 @@ var bool bIsInBeta;
 	Used for Bloat mine bug workaround */
 var bool bWasTraderOpen;
 
-/** Special check for Zedternal compatibility */
-event PreBeginPlay()
-{
-	super.PreBeginPlay();
-	
-	bUMDebug = false;
-
-	if (bDeleteMe)
-		return;
-
-	// TODO: Make this not hard-coded
-	// If Zedternal is loaded, we replace its
-	// default Trader items with our own
-	// This is a workaround for the fact that we replace
-	// vanilla weapons instead of adding new ones
-	// If we modify the trader list after the game starts,
-	// Zedternal weapon upgrades can be purchased but won't work
-	if (WorldInfo.Game.IsA('WMGameInfo_Endless'))
-	{
-		`log("[Unofficial Mod]Zedternal found, replacing weapons in Trader list...");
-		WMGameInfo_Endless(WorldInfo.Game).DefaultTraderItems = class'UnofficialMod.UMTraderItemsHelper'.static.GetZedternalTraderItems(GetDisabledUMWeapons()); //GetTraderItems();
-	}
-}
-
 event PostBeginPlay()
 {
+	local int i;
+	local Mutator Mut;
+
 	super.PostBeginPlay();
 
 	if (bDeleteMe)
 		return;
-		
+
+	// Check for custom mutators
+	if (class.name == 'UnofficialModMut')
+	{
+		for (i = 0;i < CustomMutatorInfoList.Length;i++)
+		{
+			if (CustomMutatorInfoList[i].bIsGameInfo)
+			{
+				if (WorldInfo.Game.IsA(CustomMutatorInfoList[i].ClassName))
+				{
+					WorldInfo.Game.AddMutator(CustomMutatorInfoList[i].MutClassPath, true);
+					Destroy();
+					return;
+				}
+			}
+			else
+			{
+				for (Mut = WorldInfo.Game.BaseMutator;Mut != None;Mut = Mut.NextMutator)
+				{
+					if (Mut.IsA(CustomMutatorInfoList[i].ClassName))
+					{
+						WorldInfo.Game.AddMutator(CustomMutatorInfoList[i].MutClassPath, true);
+						Destroy();
+						return;
+					}
+				}
+			}
+		}
+	}
+
 	bIsInBeta = IsInBeta();
 
 	// InitMutator() never gets called if we're
 	// added to ServerActors, so set MyKFGI manually
 	MyKFGI = KFGameInfo(WorldInfo.Game);
 
-	// TODO: Make Zedternal check not hard-coded
 	// Check for Trader items
 	// WorldInfo.GRI does not exist yet, so wait
-	// We ignore this if it's Zedternal (handled in PreBeginPlay() above)
-	if (!WorldInfo.Game.IsA('WMGameInfo_Endless'))
-		SetTimer(5.0, false, nameof(CheckTraderItems));
+	SetTimer(5.0, false, nameof(CheckTraderItems));
 	
 	// Spawn our client config
-	ClientConfig = Spawn(class'UnofficialMod.UMClientConfig');
+	ClientConfig = Spawn(ClientConfigClass);
 
 	SetupConfig();
 
@@ -262,10 +284,6 @@ event PostBeginPlay()
 	// Wait a bit to ensure that KFMapInfo is loaded properly
 	if (bDisableRandomMapObjectives)
 		SetTimer(5.0, false, nameof(CheckMapInfo));
-		
-	// Check for bots every now and then (for HUD testing)
-	if (bUMDebug)
-		SetTimer(10.0, true, nameof(CheckBots));
 
 	// NOTE: BetaCheckVersion is set to 1082 (next version)
 	// early as invisible Bloat mine bug should be fixed then
@@ -490,7 +508,7 @@ function ModifyPlayer(Pawn Other)
 				`log("[Unofficial Mod]ModifyPlayer() - couldn't find Tier 1 in player's inventory!");
 		}
 	}
-	
+
 	// Extend Trader time for mid-game joiners
 	if (ClientConfig.CanExtendTraderTimeFor(Other))
 		ExtendTraderTime();
@@ -547,6 +565,8 @@ function Mutate(string MutateString, PlayerController Sender)
 	local KFInventoryManager KFIM;
 	local KFWeapon KFW;
 	local KFPlayerReplicationInfo KFPRI;
+	local KFPlayerController KFPC;
+	local KFTraderTrigger KFTT;
 	local array<string> StringParts;
 	local int IntSetting, FoundIndex;
 	local class<KFWeaponDefinition> WeaponDef;
@@ -557,6 +577,10 @@ function Mutate(string MutateString, PlayerController Sender)
 	// Only if cheats are enabled
 	if (Sender.CheatManager != None)
 	{
+		// Check for bots, as some of these
+		// commands are specifically for them
+		CheckBots();
+
 		if (MutateString ~= "UMArmor")
 		{
 			// Set armor on bots to max
@@ -648,6 +672,28 @@ function Mutate(string MutateString, PlayerController Sender)
 				}
 			}
 		}
+		else if (MutateString ~= "UMTestEnv")
+		{
+			// Create basic test environment:
+			// -(Re)Spawn all players
+			// -Give 10000 dosh
+			// -Open all Trader pods
+			foreach WorldInfo.AllControllers(class'KFGame.KFPlayerController', KFPC)
+			{
+				if ((KFPC.Pawn == None || KFPawn_Customization(KFPC.Pawn) != None) && KFPC.CanRestartPlayer() && KFPC.GetTeamNum() != 255)
+					MyKFGI.RestartPlayer(KFPC);
+					
+				KFPRI = KFPlayerReplicationInfo(KFPC.PlayerReplicationInfo);
+				if (KFPRI != None && KFPRI.Score < 10000)
+					KFPRI.AddDosh(10000 - KFPRI.Score);
+			}
+			
+			foreach DynamicActors(class'KFGame.KFTraderTrigger', KFTT)
+			{
+				KFTT.OpenTrader();
+			}
+		}
+
 	}
 	
 	if (WorldInfo.NetMode == NM_Standalone || Sender.PlayerReplicationInfo.bAdmin)
@@ -1540,7 +1586,11 @@ function BroadcastSystemMessage(int MsgType, int MsgValue, optional Object Optio
 function bool IsWeaponEnabled(class<KFWeapon> KFWClass)
 {
 	local int i;
-	
+
+	// TODO: Remove this when beta goes live
+	if (!IsInBeta() && KFWClass == class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM')
+		return false;
+
 	i = GameplayWeapons.Find('WeaponClass', KFWClass);
 	
 	if (i == INDEX_NONE)
@@ -1560,7 +1610,11 @@ function array< class<KFWeapon> > GetDisabledUMWeapons()
 		if (!GameplayWeapons[i].bEnabled)
 			DisabledWeapons.AddItem(GameplayWeapons[i].WeaponClass);
 	}
-	
+
+	// TODO: Remove this when beta goes live
+	if (!IsInBeta() && DisabledWeapons.Find(class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM') == INDEX_NONE)
+		DisabledWeapons.AddItem(class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM');
+		
 	return DisabledWeapons;
 }
 
@@ -1654,6 +1708,7 @@ function CheckBloatMines()
 
 defaultproperties
 {
+	ClientConfigClass=class'UnofficialMod.UMClientConfig'
 	UMTraderItems=KFGFxObject_TraderItems'UnofficialModAssets.UMTraderItems'
 	UMTraderItemsBeta=KFGFxObject_TraderItems'UnofficialModAssets.UMTraderItemsBeta'
 	// NOTE: This is set early because the
@@ -1667,6 +1722,9 @@ defaultproperties
 	CustomTraderHelperList.Add((ClassName=TIMut))
 	// Classic Mode
 	CustomTraderHelperList.Add((ClassName=ClassicMode, TraderHelperClass=class'UnofficialMod.UMTraderItemsHelper_ClassicMode'))
+	
+	// Zedternal
+	CustomMutatorInfoList.Add((ClassName=WMGameInfo_Endless, bIsGameInfo=true, MutClassPath="UnofficialModZT.UnofficialModMutZT"))
 
 	// TODO: Make this not hard-coded
 	// Tier 1 weapons

@@ -31,6 +31,22 @@ struct TraderWeaponMod
 		UMTraderItemsHelper is used
 		to create original config */
 	var class<KFWeaponDefinition> CheckWeapDef;
+	/** Minimum version for this
+		WeaponDef to be considered
+		for inclusion in Trader list
+		Used for betas */
+	var int MinVersion;
+	/** Maximum version for this
+		WeaponDef to be considered
+		for inclusion in Trader list
+		Used in case any weapons are removed */
+	var int MaxVersion;
+	
+	structdefaultproperties
+	{
+		MinVersion=1000
+		MaxVersion=10000
+	}
 };
 
 /** List of Trader modifications */
@@ -45,6 +61,11 @@ var int EnabledWeapons;
 /** Trader item count */
 var int TraderItemCount;
 
+/** Current game version
+	Used in conjunction with 
+	TraderWeaponMod.Min/MaxVersion */
+var int GameVersion;
+
 /** Don't log if a WeaponDef cannot
 	be found or replaced
 	Used for mods */
@@ -54,6 +75,13 @@ replication
 {
 	if (bNetDirty)
 		bModifiedTraderList, EnabledWeapons;
+}
+
+simulated event PreBeginPlay()
+{
+	super.PreBeginPlay();
+	
+	GameVersion = class'KFGame.KFGameEngine'.static.GetKFGameVersion();
 }
 
 simulated event ReplicatedEvent(name VarName)
@@ -68,7 +96,7 @@ function CheckTraderList()
 {
 	if (bModifiedTraderList)
 		return;
-		
+
 	ModifyTraderList();
 	bModifiedTraderList = true;
 }
@@ -128,6 +156,10 @@ simulated function ModifyTraderList()
 			continue;
 		}
 
+		// Check for version
+		if (!IsRelevantVersion(i))
+			continue;
+
 		// NOTE: This is no longer done as it prevents
 		// any potential issues if it somehow doesn't
 		// succeed on one end or the other
@@ -147,12 +179,12 @@ simulated function ModifyTraderList()
 		// Get our WeaponDefs
 		if (!GetWeaponDefs(i, OldWeapDef, NewWeapDef))
 			continue;
-		
+
 		// Check if this is already in the Trader list, possible reasons:
 		// -If using TIM and weapon is disabled
 		// -If using UM archetype and weapon is already correct
 		Index = TraderItems.SaleItems.Find('WeaponDef', NewWeapDef);
-		
+
 		if (Index != INDEX_NONE)
 			bWeaponDefAlreadyExists = true;
 		else
@@ -286,8 +318,14 @@ function bool IsWeaponDefReplaced(class<KFWeaponDefinition> KFWeapDef)
 	return ((EnabledWeapons & (1 << Index)) != 0);
 }
 
-/** Get custom KFGFxObject_TraderItems for Zedternal use */
-static function KFGFxObject_TraderItems GetZedternalTraderItems(array< class<KFWeapon> > DisabledWeapons)
+/** Checks if this Trader entry is relevant for this version */
+simulated function bool IsRelevantVersion(int Index)
+{
+	return (GameVersion >= TraderModList[Index].MinVersion && GameVersion <= TraderModList[Index].MaxVersion);
+}
+
+/** Get custom KFGFxObject_TraderItems (e.g. for Zedternal use) */
+static function KFGFxObject_TraderItems GetCustomTraderItems(array< class<KFWeapon> > DisabledWeapons)
 {
 	local KFGFxObject_TraderItems DefaultTraderItems, CustomTraderItems;
 	local array<KFGFxObject_TraderItems.STraderItem> TempTraderItem;
@@ -391,4 +429,7 @@ defaultproperties
 	// Weapons with content-lock removed
 	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_ChainBat_UM',ReplWeapDef=class'KFGame.KFWeapDef_ChainBat'))
 	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_Zweihander_UM',ReplWeapDef=class'KFGame.KFWeapDef_Zweihander'))
+	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_IonThruster_UM',ReplWeapDef=class'KFGame.KFWeapDef_IonThruster',MinVersion=1082))
+	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_ChiappaRhino_UM',ReplWeapDef=class'KFGame.KFWeapDef_ChiappaRhino',MinVersion=1082))
+	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_ChiappaRhinoDual_UM',ReplWeapDef=class'KFGame.KFWeapDef_ChiappaRhinoDual',MinVersion=1082))
 }

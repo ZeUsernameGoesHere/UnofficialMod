@@ -29,7 +29,9 @@ function bool CanUpgrade(STraderItem SelectedItem, out int CanCarryIndex, out in
 }
 
 /** Override this to do Trader UI modifications for some items
-	Fixes ammo bugs for weapons like M16/M203 and C4 */
+	Fixes ammo bugs for weapons like M16/M203 and C4
+	NOTE: We cannot override AddWeaponToOwnedItemList() because
+	it uses the private function AddTransactionAmmo() */
 function int AddItemByPriority( out SItemInformation WeaponInfo )
 {
 	local byte i;
@@ -100,30 +102,50 @@ function int AddItemByPriority( out SItemInformation WeaponInfo )
 
 /** Modify the passed weapon information as needed
 	This fixes ammo bugs for some weapons */
-simulated function ModifyOwnedWeaponInfo(out SItemInformation WeaponInfo, STraderItem DefaultItem)
+simulated function ModifyOwnedWeaponInfo(out SItemInformation WeaponInfo, const out STraderItem DefaultItem)
 {
+	local class<KFWeaponDefinition> KFWeapDef;
+	local KFGFxObject_TraderItems.STraderItem TempTraderItem;
+
 	// Only Demo for now
 	if (KFPerk_Demolitionist(CurrentPerk) != None)
 	{
 		if (DefaultItem.ClassName == 'KFWeap_AssaultRifle_M16M203_UM')
 		{
 			// Passive ammo/Extra Ammo perk skill for M16 part of M16/M203
-			if (WeaponInfo.MaxSpareAmmo > (DefaultItem.MaxSpareAmmo + DefaultItem.MagazineCapacity))
-			{
-				WeaponInfo.SpareAmmoCount = (DefaultItem.InitialSpareMags + 1) * DefaultItem.MagazineCapacity;
-				WeaponInfo.MaxSpareAmmo = DefaultItem.MaxSpareAmmo + DefaultItem.MagazineCapacity;
-			}
+			KFWeapDef = class'KFGame.KFWeapDef_M16M203';
 		}
 		else if (DefaultItem.ClassName == 'KFWeap_Thrown_C4_UM')
 		{
 			// Extra Ammo perk skill
-			if (WeaponInfo.MaxSpareAmmo > 7)
-			{
-				WeaponInfo.MaxSpareAmmo -= 5;
-				WeaponInfo.SpareAmmoCount = WeaponInfo.MaxSpareAmmo;
-			}
+			if (KFPerk_Demolitionist(CurrentPerk).IsAmmoActive())
+				KFWeapDef = class'KFGame.KFWeapDef_C4';
 		}
 	}
+	
+	if (KFWeapDef == None)
+		return;
+		
+	class'UnofficialMod.UMClientConfig'.static.GetCustomSTraderItemFor(KFWeapDef, TempTraderItem);
+
+	// Reset to vanilla defaults
+   	WeaponInfo.MagazineCapacity = DefaultItem.MagazineCapacity;
+	CurrentPerk.ModifyMagSizeAndNumber( none, WeaponInfo.MagazineCapacity, TempTraderItem.AssociatedPerkClasses,, TempTraderItem.ClassName );
+
+	WeaponInfo.MaxSpareAmmo = DefaultItem.MaxSpareAmmo;
+	CurrentPerk.ModifyMaxSpareAmmoAmount(none, WeaponInfo.MaxSpareAmmo, TempTraderItem);
+	WeaponInfo.MaxSpareAmmo +=  WeaponInfo.MagazineCapacity;
+
+	WeaponInfo.SpareAmmoCount = DefaultItem.InitialSpareMags * DefaultItem.MagazineCapacity;
+	CurrentPerk.ModifySpareAmmoAmount(none, WeaponInfo.SpareAmmoCount, TempTraderItem);
+	WeaponInfo.SpareAmmoCount += WeaponInfo.MagazineCapacity;
+	
+	WeaponInfo.SecondaryAmmoCount = DefaultItem.InitialSecondaryAmmo;
+	CurrentPerk.ModifyMagSizeAndNumber( none, WeaponInfo.MagazineCapacity, TempTraderItem.AssociatedPerkClasses, true, TempTraderItem.ClassName );
+	CurrentPerk.ModifySpareAmmoAmount( none, WeaponInfo.SecondaryAmmoCount, TempTraderItem, true );
+
+	WeaponInfo.MaxSecondaryAmmo = DefaultItem.MaxSecondaryAmmo;
+	CurrentPerk.ModifyMaxSpareAmmoAmount( none, WeaponInfo.MaxSecondaryAmmo, TempTraderItem, true );
 }
 
 defaultproperties

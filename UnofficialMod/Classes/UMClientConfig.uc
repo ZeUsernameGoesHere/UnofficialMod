@@ -17,27 +17,27 @@ class UMClientConfig extends ReplicationInfo
 
 /** Config version, incremented when new settings are
 	added so that config can be saved with new defaults */
-var config int INIVersion;
+var globalconfig int INIVersion;
 
 /** Disable laser sight on M14 EBR by default */
-var config bool bM14EBRLaserSightDisabled;
+var globalconfig bool bM14EBRLaserSightDisabled;
 
 /** Enable manual reload on M203 part of M16/M203 */
-var config bool bM203ManualReload;
+var globalconfig bool bM203ManualReload;
 
 /** HUD Health/Armor colors */
-var config color HUDHealthColor;
-var config color HUDRegenHealthColor; // Defaults to white
-var config color HUDArmorColor;
+var globalconfig color HUDHealthColor;
+var globalconfig color HUDRegenHealthColor; // Defaults to white
+var globalconfig color HUDArmorColor;
 
 /** Enable manual reload on HM-501 grenade launcher */
-var config bool bHM501ManualReload;
+var globalconfig bool bHM501ManualReload;
 
 /** Disable Medic weapon charge display
 	0 enables display for all
 	1 disables display for Field Medic
 	2 disables display for all perks */
-var config int DisableHMTechChargeHUD;
+var globalconfig int DisableHMTechChargeHUD;
 
 /** Options to disable Trader dialog */
 struct TraderDialogOptions
@@ -51,30 +51,30 @@ struct TraderDialogOptions
 };
 
 /** Disable Trader dialog in whole or in part */
-var config TraderDialogOptions DisableTraderDialog;
+var globalconfig TraderDialogOptions DisableTraderDialog;
 
 /** DLO Paths for weapon classes for which to auto-set alt-fire
 	We have to use this roundabout method because we cannot
 	use class<KFWeapon> as a config value directly */
-var config array<string> AltFireWeaponClassPaths;
+var globalconfig array<string> AltFireWeaponClassPaths;
 
 /** Whether we are notified when someone else kills a large zed */
-var config bool bShowOthersLargeZedKills;
+var globalconfig bool bShowOthersLargeZedKills;
 
 /** HUD Supplier icon colors */
-var config color HUDSupplierUsableColor;
-var config color HUDSupplierHalfUsableColor;
-var config color HUDSupplierActiveColor;
+var globalconfig color HUDSupplierUsableColor;
+var globalconfig color HUDSupplierHalfUsableColor;
+var globalconfig color HUDSupplierActiveColor;
 
 /** Show zed time extension info */
-var config bool bShowZedTimeExtensionHUD;
+var globalconfig bool bShowZedTimeExtensionHUD;
 
 /** Disable zed time desaturation filter */
-var config bool bDisableZedTimeDesaturationFilter;
+var globalconfig bool bDisableZedTimeDesaturationFilter;
 
 /** Allow Steam friends to pick up dropped
 	weapons regardless of server settings */
-var config bool bAllowFriendWeaponsPickup;
+var globalconfig bool bAllowFriendWeaponsPickup;
 
 /** Replicated server-side config settings */
 
@@ -513,9 +513,9 @@ simulated function NotifyServerSettings()
 	AddChatMessage("-Picking up others' dropped weapons is" @ (bDisableOthersWeaponsPickup ? "DISABLED" : "ENABLED"));
 
 	// Check for INT file
-	if (Left(class'UnofficialMod.KFWeapDef_C4_UM'.static.GetItemLocalization("ItemName"), 1) == "?")
+	if (Left(Localize("KFWeap_Thrown_C4_UM", "ItemName", "UnofficialMod"), 1) == "?")
 	{
-		AddChatMessage("-Localization file NOT found. Workaround for Trader items implemented; other localization might not work.");
+		AddChatMessage("-Localization file NOT found. Workaround for Trader items implemented; other localization will not work.");
 		AddChatMessage("--Check Steam workshop page for more info.");
 	}
 	
@@ -953,30 +953,52 @@ simulated function CheckSteamFriends()
 	}
 }
 
-/** Get weapon name (workaround for INT file potentially not being there) */
-static simulated function string GetLocalWeaponName(class<KFWeaponDefinition> UMWeapDef, class<KFWeaponDefinition> KFWeapDef)
+/** Get a base STraderItem, used for certain
+	perk-related bug fixes for specific weapons */
+static simulated function GetCustomSTraderItemFor(class<KFWeaponDefinition> KFWeapDef, out KFGFxObject_TraderItems.STraderItem TraderItem)
 {
-	local string WeaponName;
-	
-	WeaponName = UMWeapDef.static.GetItemLocalization("ItemName");
-	
-	if (Left(WeaponName, 1) == "?")
-		WeaponName = KFWeapDef.static.GetItemName() @ "[UM]";
-		
-	return WeaponName;
+	local KFGFxObject_TraderItems DefaultTI;
+	local array<KFGFxObject_TraderItems.STraderItem> TempTraderItem;
+	local int Index;
+
+	DefaultTI = class'KFGame.KFGameReplicationInfo'.default.TraderItems;
+
+	// Find the original item
+	Index = DefaultTI.SaleItems.Find('WeaponDef', KFWeapDef);
+	if (Index != INDEX_NONE)
+	{
+		TraderItem = DefaultTI.SaleItems[Index];
+		return;
+	}
+
+	`log("[Unofficial Mod]Didn't find TraderItem for" @ KFWeapDef $ "; doing manual setup!");
+	// If we didn't find it, set it up manually without the ItemID
+	TempTraderItem.Length = 1;
+	TempTraderItem[0].WeaponDef = KFWeapDef;
+	DefaultTI.SetItemsInfo(TempTraderItem);
+	TraderItem = TempTraderItem[0];
 }
 
-/** Get weapon description (workaround for INT file potentially not being there) */
-static simulated function string GetLocalWeaponDesc(class<KFWeaponDefinition> UMWeapDef, class<KFWeaponDefinition> KFWeapDef)
+/** Get weapon localization (workaround for INT file potentially not being there) */
+static simulated function string GetWeaponLocalization(string KeyName, class<KFWeaponDefinition> UMWeapDef, class<KFWeaponDefinition> KFWeapDef)
 {
-	local string WeaponDesc;
+	local array<string> StringParts;
+	local string WeaponString;
+
+	ParseStringIntoArray(UMWeapDef.default.WeaponClassPath, StringParts, ".", true);
+	WeaponString = Localize(StringParts[1], KeyName, StringParts[0]);
 	
-	WeaponDesc = UMWeapDef.static.GetItemLocalization("ItemDescription");
+	if (Left(WeaponString, 1) == "?")
+	{
+		WeaponString = KFWeapDef.static.GetItemLocalization(KeyName);
+
+		// Append "[UM]" to weapon name
+		// so user knows it's our weapon
+		if (KeyName ~= "ItemName")
+			WeaponString @= "[UM]";
+	}
 	
-	if (Left(WeaponDesc, 1) == "?")
-		WeaponDesc = KFWeapDef.static.GetItemDescription();
-		
-	return WeaponDesc;
+	return WeaponString;
 }
 
 /** Get UMClientConfig instance */

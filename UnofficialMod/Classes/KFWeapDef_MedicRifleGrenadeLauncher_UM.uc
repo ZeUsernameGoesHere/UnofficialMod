@@ -9,14 +9,9 @@ class KFWeapDef_MedicRifleGrenadeLauncher_UM extends KFWeapDef_MedicRifleGrenade
 	abstract;
 
 /** Workaround for potentially missing INT file */
-static function string GetItemName()
+static function string GetItemLocalization(string KeyName)
 {
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponName(default.class, class'KFGame.KFWeapDef_MedicRifleGrenadeLauncher');
-}
-
-static function string GetItemDescription()
-{
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponDesc(default.class, class'KFGame.KFWeapDef_MedicRifleGrenadeLauncher');
+	return class'UnofficialMod.UMClientConfig'.static.GetWeaponLocalization(KeyName, default.class, class'KFGame.KFWeapDef_MedicRifleGrenadeLauncher');
 }
 
 defaultproperties

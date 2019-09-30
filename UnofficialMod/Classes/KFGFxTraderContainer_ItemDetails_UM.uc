@@ -12,6 +12,19 @@ class KFGFxTraderContainer_ItemDetails_UM extends KFGFxTraderContainer_ItemDetai
 /** UMClientConfig instance */
 var UMClientConfig ClientConfig;
 
+/** Unofficial Mod to vanilla WeaponDefs
+	Used to fix Trader UI ammo bugs */
+struct WeaponDefConv
+{
+	/** UM WeaponDef */
+	var class<KFWeaponDefinition> UMWeapDef;
+	/** Vanilla WeaponDef */
+	var class<KFWeaponDefinition> KFWeapDef;
+};
+
+/** WeaponDef conversion list */
+var const array<WeaponDefConv> WeaponDefConvList;
+
 /** Override this to get our UMClientConfig */
 function Initialize(KFGFxObject_Menu NewParentMenu)
 {
@@ -28,6 +41,7 @@ function SetGenericItemDetails(const out STraderItem TraderItem, out GFxObject I
 	local byte FinalMagazineCapacity;
 	local Float DamageValue;
 	local Float NextDamageValue;
+	local KFGFxObject_TraderItems.STraderItem TempTraderItem;
 
 	// Disable weapon upgrades if desired
 	if ((KFGFxMenu_Trader_UM(MyTraderMenu) != None && KFGFxMenu_Trader_UM(MyTraderMenu).bDisableWeaponUpgrades) ||
@@ -123,16 +137,16 @@ function SetGenericItemDetails(const out STraderItem TraderItem, out GFxObject I
 	CurrentPerk = KFPlayerController(GetPC()).CurrentPerk;
 	if( CurrentPerk != none )
 	{
-		FinalMaxSpareAmmoCount = TraderItem.MaxSpareAmmo;
-		FinalMagazineCapacity = TraderItem.MagazineCapacity;
+		// Get custom STraderItem if necessary
+		GetSTraderItem(TraderItem, TempTraderItem);
 
-		CurrentPerk.ModifyMagSizeAndNumber(none, FinalMagazineCapacity, TraderItem.AssociatedPerkClasses,, TraderItem.ClassName);
+		FinalMaxSpareAmmoCount = TempTraderItem.MaxSpareAmmo;
+		FinalMagazineCapacity = TempTraderItem.MagazineCapacity;
+
+		CurrentPerk.ModifyMagSizeAndNumber(none, FinalMagazineCapacity, TempTraderItem.AssociatedPerkClasses,, TempTraderItem.ClassName);
 
 		// When a perk calculates total available weapon ammo, it expects MaxSpareAmmo+MagazineCapacity
-		CurrentPerk.ModifyMaxSpareAmmoAmount(none, FinalMaxSpareAmmoCount, TraderItem,);
-		
-		// Modify values here as necessary
-		ModifyAmmoValues(TraderItem, CurrentPerk, FinalMagazineCapacity, FinalMaxSpareAmmoCount);
+		CurrentPerk.ModifyMaxSpareAmmoAmount(none, FinalMaxSpareAmmoCount, TempTraderItem,);
 
 		FinalMaxSpareAmmoCount += FinalMagazineCapacity;
 	}
@@ -167,26 +181,25 @@ function SetGenericItemDetails(const out STraderItem TraderItem, out GFxObject I
  	SetObject("itemData", ItemData);
 }
 
-/** Modifies ammo counts to fix some Trader UI bugs */
-function ModifyAmmoValues(const out STraderItem TraderItem, KFPerk CurrentPerk, out byte MagCapacity, out int MaxSpareAmmo)
+/** Get STraderItem for this WeaponDef,
+	converting from UM to vanilla if necessary */
+function GetSTraderItem(const out STraderItem OrigTraderItem, out STraderItem TraderItem)
 {
-	// Only Demo for now
-	if (KFPerk_Demolitionist(CurrentPerk) != None)
-	{
-		if (TraderItem.ClassName == 'KFWeap_AssaultRifle_M16M203_UM')
-		{
-			// Passive ammo for M16 part of M16/M203
-			MaxSpareAmmo = TraderItem.MaxSpareAmmo;
-		}
-		else if (TraderItem.ClassName == 'KFWeap_Thrown_C4_UM')
-		{
-			// Extra Ammo perk skill
-			if (KFPerk_Demolitionist(CurrentPerk).IsAmmoActive())
-				MaxSpareAmmo -= 5;
-		}
-	}
+	local int Index;
+
+	Index = WeaponDefConvList.Find('UMWeapDef', OrigTraderItem.WeaponDef);
+	
+	if (Index != INDEX_NONE)
+		class'UnofficialMod.UMClientConfig'.static.GetCustomSTraderItemFor(WeaponDefConvList[Index].KFWeapDef, TraderItem);
+	else
+		TraderItem = OrigTraderItem;
 }
 
 defaultproperties
 {
+	// WeaponDef conversions
+	// C4
+	WeaponDefConvList.Add((UMWeapDef=class'UnofficialMod.KFWeapDef_C4_UM',KFWeapDef=class'KFGame.KFWeapDef_C4'))
+	// M16-M203
+	WeaponDefConvList.Add((UMWeapDef=class'UnofficialMod.KFWeapDef_M16M203_UM',KFWeapDef=class'KFGame.KFWeapDef_M16M203'))
 }

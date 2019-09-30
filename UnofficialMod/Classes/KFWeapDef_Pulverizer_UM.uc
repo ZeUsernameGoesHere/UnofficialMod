@@ -9,14 +9,9 @@ class KFWeapDef_Pulverizer_UM extends KFWeapDef_Pulverizer
 	abstract;
 
 /** Workaround for potentially missing INT file */
-static function string GetItemName()
+static function string GetItemLocalization(string KeyName)
 {
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponName(default.class, class'KFGame.KFWeapDef_Pulverizer');
-}
-
-static function string GetItemDescription()
-{
-	return class'UnofficialMod.UMClientConfig'.static.GetLocalWeaponDesc(default.class, class'KFGame.KFWeapDef_Pulverizer');
+	return class'UnofficialMod.UMClientConfig'.static.GetWeaponLocalization(KeyName, default.class, class'KFGame.KFWeapDef_Pulverizer');
 }
 
 defaultproperties

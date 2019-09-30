@@ -88,6 +88,9 @@ var const float ZedTimeFontScale;
 	and we simulate it from there */
 var float ZedTimeRemaining;
 
+/** Are we in a beta? */
+var bool bIsInBeta;
+
 /** Medic weapon dart charge info */
 struct MedicWeaponDartChargeInfo
 {
@@ -109,6 +112,8 @@ simulated event PostBeginPlay()
 	super.PostBeginPlay();
 	
 	ClientConfig = UMClientConfig(Owner);
+	
+	bIsInBeta = class'UnofficialMod.UnofficialModMut'.static.IsInBeta();
 	
 	if (WorldInfo.NetMode != NM_DedicatedServer)
 	{
@@ -136,14 +141,18 @@ simulated function DrawHUD(HUD H, Canvas C)
 
 	if(TheKFPC.Pawn != None)
 	{
-		// HMTech Medic weapon lock-on
-		if (KFWeap_MedicBase(TheKFPC.Pawn.Weapon) != None)
-			DrawMedicWeaponLockOn(H, C, KFWeap_MedicBase(TheKFPC.Pawn.Weapon));
-
+		// TODO: Remove this when beta becomes live
+		if (bIsInBeta)
+		{
+			// HMTech Medic weapon lock-on
+			if (KFWeap_MedicBase(TheKFPC.Pawn.Weapon) != None)
+				DrawMedicWeaponLockOn(H, C, KFWeap_MedicBase(TheKFPC.Pawn.Weapon));
+		}
+		
 		// Unequipped HMTech recharge
 		if (ClientConfig.AllowHMTechChargeDisplay())
 			DrawMedicWeaponRecharge(H, C, TheKFPC.Pawn);
-			
+
 		// Empty secondary ammo
 		if (KFWeapon(TheKFPC.Pawn.Weapon) != None)
 			CheckAndDrawEmptySecondaryIcon(H, C, KFWeapon(TheKFPC.Pawn.Weapon));
@@ -370,7 +379,6 @@ simulated function SetupMedicDartInfo()
 simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 {
 	local KFWeapon KFW;
-	local KFWeap_MedicBase KFWMB;
 	local int MedicWeaponCount, Index;
 	local float IconBaseX, IconBaseY, IconHeight, IconWidth;
 	local float IconRatioX, IconRatioY, ChargePct, ChargeBaseY, WeaponBaseX;
@@ -398,8 +406,7 @@ simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 		// Specific check for Hemoclobber needed because it
 		// extends KFWeap_MeleeBase and not KFWeap_MedicBase
 		// Also only for weapons with rechargeable darts
-		KFWMB = KFWeap_MedicBase(KFW);
-		if ((KFWMB == None || !KFWMB.bRechargeHealAmmo) && KFWeap_Blunt_MedicBat(KFW) == None)
+		if ((!KFW.IsA('KFWeap_MedicBase') || KFW.bCanRefillSecondaryAmmo) && KFWeap_Blunt_MedicBat(KFW) == None)
 			continue;
 
 		// Only if this is not our current weapon
