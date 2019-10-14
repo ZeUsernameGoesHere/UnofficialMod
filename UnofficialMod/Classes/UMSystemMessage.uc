@@ -28,7 +28,6 @@ var localized string AddUpgradeOverrideString;
 var localized string RemoveUpgradeOverrideString;
 var localized string NoUpgradeOverrideString;
 var localized string GameplayWeaponString;
-var localized string BloatMinesRemovedString;
 var localized string DisableOthersWeaponsPickupString;
 var localized string PlayerPickedUpOthersWeaponString;
 
@@ -47,7 +46,6 @@ enum UMSystemMessageType
 	UMSMT_RemoveUpgradeOverride,
 	UMSMT_NoUpgradeOverride,
 	UMSMT_GameplayWeapon,
-	UMSMT_BloatMinesRemoved,
 	UMSMT_DisableOthersWeaponsPickup,
 	UMSMT_PlayerPickedUpOthersWeapon
 };
@@ -138,9 +136,6 @@ static function string GetString(
 		case UMSMT_GameplayWeapon:
 			KFWClass = class<KFWeapon>(OptionalObject);
 			FullString = Repl(default.GameplayWeaponString, "%x%", KFWClass.default.ItemName) @ SettingString @ default.NextSessionString;
-			break;
-		case UMSMT_BloatMinesRemoved:
-			FullString = Repl(default.BloatMinesRemovedString, "%x%", MsgValue);
 			break;
 		case UMSMT_DisableOthersWeaponsPickup:
 			FullString = default.DisableOthersWeaponsPickupString @ SettingString;

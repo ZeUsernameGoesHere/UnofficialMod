@@ -43,12 +43,12 @@ function int AddItemByPriority( out SItemInformation WeaponInfo )
 	WeaponPriority = WeaponInfo.DefaultItem.GroupPriority;
 	for( i = 0; i < OwnedItemList.length; i++ )
 	{
-        //Receiving a single for a dual we already own (Ex: Weapon thrown at the player)
-        if (WeaponInfo.DefaultItem.DualClassName == OwnedItemList[i].DefaultItem.ClassName)
-        {
-            MergeSingleIntoDual(OwnedItemList[i], WeaponInfo);
-            return i;
-        }
+		//Receiving a single for a dual we already own (Ex: Weapon thrown at the player)
+		if (WeaponInfo.DefaultItem.DualClassName == OwnedItemList[i].DefaultItem.ClassName)
+		{
+			MergeSingleIntoDual(OwnedItemList[i], WeaponInfo);
+			return i;
+		}
 
 		// If the weapon belongs in the group prior to the current weapon, we've found the spot
 		if( WeaponGroup < OwnedItemList[i].DefaultItem.InventoryGroup )

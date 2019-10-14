@@ -416,6 +416,28 @@ static function class<KFWeaponDefinition> GetOriginalWeaponDef(class<KFWeaponDef
 	return None;
 }
 
+/** Copy skins from vanilla weapons to Unofficial Mod weapons */
+static simulated function CopyWeaponSkins()
+{
+	local int i;
+	local class<KFWeaponDefinition> KFWeapDef, UMWeapDef;
+	local class<KFWeapon> KFWC;
+	
+	for (i = 0;i < default.TraderModList.Length;i++)
+	{
+		KFWeapDef = default.TraderModList[i].ReplWeapDef;
+		UMWeapDef = default.TraderModList[i].NewWeapDef;
+
+		// Second check ignores WeaponDefs that remove content-lock
+		if (KFWeapDef != None && !(KFWeapDef.default.WeaponClassPath ~= UMWeapDef.default.WeaponClassPath))
+		{
+			KFWC = class<KFWeapon>(DynamicLoadObject(KFWeapDef.default.WeaponClassPath, class'Class'));
+			if (KFWC != None && KFWC.default.SkinItemId != 0)
+				class'KFGame.KFWeaponSkinList'.static.SaveWeaponSkin(UMWeapDef, KFWC.default.SkinItemId);
+		}
+	}
+}
+
 defaultproperties
 {
 	// Replacement weapon defs

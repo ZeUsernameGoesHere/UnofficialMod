@@ -14,7 +14,7 @@ class KFTraderDialogManager_UM extends KFTraderDialogManager
 var UMClientConfig.TraderDialogOptions DialogOptions;
 
 /** NOTE: Check this on each update */
-const MAX_TRADER_DIALOG = 274;
+const MAX_TRADER_DIALOG = 275;
 
 /** Override to add in check for disabled Trader dialog
 	and to remove all log lines to eliminate log spam */

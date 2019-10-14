@@ -46,27 +46,27 @@ static function ClientReceive(
 		KFPMClass = class<KFPawn_Monster>(OptionalObject);
 		KFPRI = KFPlayerReplicationInfo(RelatedPRI_1);
 		KFPC = KFPlayerController(P);
-		
+
 		if (KFPMClass == None || KFPRI == None || KFPC == None || KFPC.MyGFxHUD == None || !KFPC.bShowKillTicker)
 			return;
-			
+
 		GFxManager = KFPC.MyGFxHUD.GetVariableObject("root");
 		DataObject = KFPC.MyGFxHUD.CreateObject("Object");
-		
-        DataObject.SetBool("humanDeath", false);
 
-        DataObject.SetString("killedName", KFPMClass.static.GetLocalizedName());
-        DataObject.SetString("killedTextColor", "");
-        // This would normally be left blank,
-        // but the Flash HUD puts a space in the
-        // kill message, which looks sloppy
-        DataObject.SetString("killedIcon", "img://" $ class'KFGame.KFPerk_Monster'.static.GetPerkIconPath());
+		DataObject.SetBool("humanDeath", false);
 
-        DataObject.SetString("killerName", KFPRI.GetHumanReadableName());
-        DataObject.SetString("killerTextColor", "");
-        DataObject.SetString("killerIcon", "img://" $ KFPRI.CurrentPerkClass.static.GetPerkIconPath());
+		DataObject.SetString("killedName", KFPMClass.static.GetLocalizedName());
+		DataObject.SetString("killedTextColor", "");
+		// This would normally be left blank,
+		// but the Flash HUD puts a space in the
+		// kill message, which looks sloppy
+		DataObject.SetString("killedIcon", "img://" $ class'KFGame.KFPerk_Monster'.static.GetPerkIconPath());
 
-        GFxManager.SetObject("newBark", DataObject);
+		DataObject.SetString("killerName", KFPRI.GetHumanReadableName());
+		DataObject.SetString("killerTextColor", "");
+		DataObject.SetString("killerIcon", "img://" $ KFPRI.CurrentPerkClass.static.GetPerkIconPath());
+
+		GFxManager.SetObject("newBark", DataObject);
 
 		return;
 	}

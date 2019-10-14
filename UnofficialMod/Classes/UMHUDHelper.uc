@@ -135,20 +135,19 @@ simulated event Tick(float DeltaTime)
 /** Draw relevant HUD stuff */
 simulated function DrawHUD(HUD H, Canvas C)
 {
+	local KFPawn LockPawn;
+	local color LockColor;
+
 	// Don't draw canvas HUD in cinematic mode
 	if(TheKFPC == None || TheKFPC.bCinematicMode)
 		return;
 
 	if(TheKFPC.Pawn != None)
 	{
-		// TODO: Remove this when beta becomes live
-		if (bIsInBeta)
-		{
-			// HMTech Medic weapon lock-on
-			if (KFWeap_MedicBase(TheKFPC.Pawn.Weapon) != None)
-				DrawMedicWeaponLockOn(H, C, KFWeap_MedicBase(TheKFPC.Pawn.Weapon));
-		}
-		
+		// HMTech Medic weapon lock-on
+		if (GetLockedOnPlayer(KFWeapon(TheKFPC.Pawn.Weapon), LockPawn, LockColor))
+			DrawMedicWeaponLockOn(H, C, LockPawn, LockColor);
+
 		// Unequipped HMTech recharge
 		if (ClientConfig.AllowHMTechChargeDisplay())
 			DrawMedicWeaponRecharge(H, C, TheKFPC.Pawn);
@@ -245,27 +244,77 @@ simulated function CheckForWeaponPickup()
 	WeaponPickup = BestKFDP;
 }
 
-/** Draw HMTech Medic weapon lock-on */
-simulated function DrawMedicWeaponLockOn(HUD H, Canvas C, KFWeap_MedicBase KFW)
+/** Get locked-on player if relevant */
+function bool GetLockedOnPlayer(KFWeapon KFW, out KFPawn LockPawn, out color LockColor)
 {
-	local KFPawn CurrentActor;
-	local color IconColor;
+	local KFWeap_MedicBase KFWMB;
+	local KFWeap_HRG_Healthrower KFWHT;
+
+	// Shouldn't happen, but better safe than sorry
+	if (KFW == None)
+		return false;
+
+	if (KFWeap_MedicBase(KFW) != None)
+	{
+		// Most Medic weapons
+		KFWMB = KFWeap_MedicBase(KFW);
+		if (KFWMB.LockedTarget != None)
+		{
+			LockPawn = KFPawn(KFWMB.LockedTarget);
+			LockColor = MedicLockOnColor;
+		}
+		else if (KFWMB.PendingLockedTarget != None)
+		{
+			LockPawn = KFPawn(KFWMB.PendingLockedTarget);
+			LockColor = MedicPendingLockOnColor;
+		}
+		
+		return (LockPawn != None);
+	}
+	else if (KFWeap_HRG_Healthrower(KFW) != None)
+	{
+		// Healthrower
+		KFWHT = KFWeap_HRG_Healthrower(KFW);
+		if (KFWHT.LockedTarget != None)
+		{
+			LockPawn = KFPawn(KFWHT.LockedTarget);
+			LockColor = MedicLockOnColor;
+		}
+		else if (KFWHT.PendingLockedTarget != None)
+		{
+			LockPawn = KFPawn(KFWHT.PendingLockedTarget);
+			LockColor = MedicPendingLockOnColor;
+		}
+		
+		return (LockPawn != None);
+	}
+	else if (KFW.MedicComp != None && KFW.TargetingComp != None && (KFW.TargetingComp.TargetPlayers[0] != 0 || KFW.TargetingComp.TargetPlayers[1] != 0))
+	{
+		// General Medic weapon
+		// NOTE: There are no current vanilla weapons with this setup,
+		// so we check both TargetPlayers values just in case
+		if (KFW.TargetingComp.LockedTarget != None)
+		{
+			LockPawn = KFW.TargetingComp.LockedTarget;
+			LockColor = MedicLockOnColor;
+		}
+		else if (KFW.TargetingComp.PendingLockedTarget != None)
+		{
+			LockPawn = KFW.TargetingComp.PendingLockedTarget;
+			LockColor = MedicPendingLockOnColor;
+		}
+
+		return (LockPawn != None);
+	}
+	
+	return false;
+}
+
+/** Draw HMTech Medic weapon lock-on */
+simulated function DrawMedicWeaponLockOn(HUD H, Canvas C, KFPawn CurrentActor, color IconColor)
+{
 	local vector ScreenPos;
 	local float IconSize;
-
-	if (KFW.LockedTarget != None)
-	{
-		CurrentActor = KFPawn(KFW.LockedTarget);
-		IconColor = MedicLockOnColor;
-	}
-	else if (KFW.PendingLockedTarget != None)
-	{
-		CurrentActor = KFPawn(KFW.PendingLockedTarget);
-		IconColor = MedicPendingLockOnColor;
-	}
-
-	if (CurrentActor == None)
-		return;
 
 	ScreenPos = C.Project(CurrentActor.Mesh.GetPosition() + (CurrentActor.CylinderComponent.CollisionHeight * vect(0,0,1.25)));
 	if (ScreenPos.X < 0 || ScreenPos.X > C.ClipX || ScreenPos.Y < 0 || ScreenPos.Y > C.ClipY)
@@ -403,10 +452,12 @@ simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 
 	foreach P.InvManager.InventoryActors(class'KFGame.KFWeapon', KFW)
 	{
+		// TODO: Make this check not hard-coded
 		// Specific check for Hemoclobber needed because it
 		// extends KFWeap_MeleeBase and not KFWeap_MedicBase
 		// Also only for weapons with rechargeable darts
-		if ((!KFW.IsA('KFWeap_MedicBase') || KFW.bCanRefillSecondaryAmmo) && KFWeap_Blunt_MedicBat(KFW) == None)
+		if ((!KFW.IsA('KFWeap_MedicBase') || KFW.bCanRefillSecondaryAmmo) && KFWeap_Blunt_MedicBat(KFW) == None
+			&& KFWeap_HRG_Healthrower(KFW) == None)
 			continue;
 
 		// Only if this is not our current weapon

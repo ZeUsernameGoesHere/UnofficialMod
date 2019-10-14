@@ -387,6 +387,9 @@ simulated function CheckLocalPC()
 
 		// Add custom Interaction for modifying our settings
 		AddUMInteraction(class'UnofficialMod.UMExecInteraction');
+		
+		// Copy weapon skins from vanilla weapons to our weapons
+		class'UnofficialMod.UMTraderItemsHelper'.static.CopyWeaponSkins();
 	}
 }
 

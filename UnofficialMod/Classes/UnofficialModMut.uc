@@ -165,7 +165,7 @@ var const array<CustomTraderHelperInfo> CustomTraderHelperList;
 var const array< class<KFWeapon> > Tier1Weapons;
 
 /** Client config class */
-var class<UMClientConfig> ClientConfigClass;
+var const class<UMClientConfig> ClientConfigClass;
 
 /** Client config */
 var UMClientConfig ClientConfig;
@@ -200,7 +200,7 @@ struct CustomMutatorInfo
 	/** Is this a GameInfo? False means that this is a Mutator */
 	var bool bIsGameInfo;
 	/** Custom mutator class path
-		Loaded DynamicLoadObject() to avoid dependencies */
+		Loaded via GameInfo.AddMutator() to avoid dependencies */
 	var string MutClassPath;
 };
 	
@@ -221,10 +221,6 @@ var const string ModVersion;
 
 /** Cached value for IsInBeta() */
 var bool bIsInBeta;
-
-/** Was Trader open last check?
-	Used for Bloat mine bug workaround */
-var bool bWasTraderOpen;
 
 event PostBeginPlay()
 {
@@ -284,12 +280,6 @@ event PostBeginPlay()
 	// Wait a bit to ensure that KFMapInfo is loaded properly
 	if (bDisableRandomMapObjectives)
 		SetTimer(5.0, false, nameof(CheckMapInfo));
-
-	// NOTE: BetaCheckVersion is set to 1082 (next version)
-	// early as invisible Bloat mine bug should be fixed then
-	// Set up timer for Bloat mine check if on server
-	if (WorldInfo.NetMode == NM_DedicatedServer && !bIsInBeta)
-		SetTimer(1.0, true, nameof(CheckBloatMines));
 
 	// Add ourselves to mutator list in case
 	// we were added to server actors
@@ -1041,87 +1031,6 @@ function bool OverridePickupQuery(Pawn Other, class<Inventory> ItemClass, Actor 
 	return bResult;
 }
 
-/** Temporary workaround for custom weapons not giving dosh
-	Also fixes zed aggro-switching with custom weapons */
-function NetDamage(int OriginalDamage, out int Damage, Pawn Injured, Controller InstigatedBy, vector HitLocation, out vector Momentum, class<DamageType> DamageType, Actor DamageCauser)
-{
-	local KFPawn_Monster KFPM;
-	local DamageInfo Info;
-	local Pawn BlockerPawn;
-	local bool bChangedEnemies;
-	local int HistoryIndex;
-	local float DamageThreshold;
-	local KFAIController KFAIC;
-
-	// Call super first to ensure that
-	// accurate damage is passed
-	super.NetDamage(OriginalDamage, Damage, Injured, InstigatedBy, HitLocation, Momentum, DamageType, DamageCauser);
-
-	// BetaCheckVersion is 1082 (next update from
-	// when this was added) as the custom weapon
-	// dosh bug should be fixed in the next update
-	if (bIsInBeta)
-		return;
-
-	KFPM = KFPawn_Monster(Injured);
-	KFAIC = KFAIController(Injured.Controller);
-
-	// Player-on-zed damage with custom weapon
-	if (KFPM != None && KFAIC != None && KFPlayerController(InstigatedBy) != None && IsFromModWeapon(DamageCauser))
-	{
-		// Copy/paste modified from KFPawn.UpdateDamageHistory()
-		if( !KFPM.GetDamageHistory( InstigatedBy, Info, HistoryIndex ) )
-		{
-			KFPM.DamageHistory.Insert(0, 1);
-		}
-
-		DamageThreshold = float(KFPM.HealthMax) * KFAIC.AggroPlayerHealthPercentage;
-
-        KFPM.UpdateDamageHistoryValues( InstigatedBy, Damage, DamageCauser, KFAIC.AggroPlayerResetTime, Info, class<KFDamageType>(DamageType) );
-
-		if( `TimeSince(KFPM.DamageHistory[KFAIC.CurrentEnemysHistoryIndex].LastTimeDamaged) > 10 )
-		{
-			KFPM.DamageHistory[KFAIC.CurrentEnemysHistoryIndex].Damage = 0;
-		}
-
-		if( KFAIC.IsAggroEnemySwitchAllowed()
-			&& InstigatedBy.Pawn != KFAIC.Enemy
-			&& Info.Damage >= DamageThreshold
-			&& Info.Damage > KFPM.DamageHistory[KFAIC.CurrentEnemysHistoryIndex].Damage )
-		{
-			BlockerPawn = KFAIC.GetPawnBlockingPathTo( InstigatedBy.Pawn, true );
-			if( BlockerPawn == none )
-			{
-				bChangedEnemies = KFAIC.SetEnemy(InstigatedBy.Pawn);
-			}
-			else
-			{
-				bChangedEnemies = KFAIC.SetEnemy( BlockerPawn );
-			}
-		}
-
-		KFPM.DamageHistory[HistoryIndex] = Info;
-	
-		if( bChangedEnemies )
-		{
-			KFAIC.CurrentEnemysHistoryIndex = HistoryIndex;
-		}
-	}
-}
-
-/** Checks for custom weapons */
-function bool IsFromModWeapon(Actor DmgCauser)
-{
-	local name PackageName;
-	
-	if (DmgCauser == None)
-		return false;
-
-	PackageName = DmgCauser.GetPackageName();
-	
-	return (PackageName != 'KFGameContent' && PackageName != 'KFGame');
-}
-
 /** Check for player-on-large-zed kill and player death */
 function ScoreKill(Controller Killer, Controller Killed)
 {
@@ -1587,10 +1496,6 @@ function bool IsWeaponEnabled(class<KFWeapon> KFWClass)
 {
 	local int i;
 
-	// TODO: Remove this when beta goes live
-	if (!IsInBeta() && KFWClass == class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM')
-		return false;
-
 	i = GameplayWeapons.Find('WeaponClass', KFWClass);
 	
 	if (i == INDEX_NONE)
@@ -1611,10 +1516,6 @@ function array< class<KFWeapon> > GetDisabledUMWeapons()
 			DisabledWeapons.AddItem(GameplayWeapons[i].WeaponClass);
 	}
 
-	// TODO: Remove this when beta goes live
-	if (!IsInBeta() && DisabledWeapons.Find(class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM') == INDEX_NONE)
-		DisabledWeapons.AddItem(class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM');
-		
 	return DisabledWeapons;
 }
 
@@ -1681,42 +1582,15 @@ function bool CheckFriendPickup(PlayerReplicationInfo OwnerPRI, PlayerReplicatio
 	return (FriendPRIInfoList[Index].FriendPRIs.Find(CheckPRI) != INDEX_NONE);
 }
 
-/** Check Bloat mines and delete if in Trader time
-	Workaround for invisible Bloat mine bug */
-function CheckBloatMines()
-{
-	local bool bIsTraderOpen;
-	local KFProj_BloatPukeMine BloatMine;
-	local int BloatMineCount;
-
-	bIsTraderOpen = MyKFGI.MyKFGRI.bTraderIsOpen;
-	if (bIsTraderOpen && !bWasTraderOpen)
-	{
-		BloatMineCount = 0;
-		foreach DynamicActors(class'KFGameContent.KFProj_BloatPukeMine', BloatMine)
-		{
-			BloatMine.Destroy();
-			BloatMineCount++;
-		}
-		
-		if (BloatMineCount > 0)
-			BroadcastSystemMessage(UMSMT_BloatMinesRemoved, BloatMineCount);
-	}
-	
-	bWasTraderOpen = bIsTraderOpen;
-}
-
 defaultproperties
 {
 	ClientConfigClass=class'UnofficialMod.UMClientConfig'
 	UMTraderItems=KFGFxObject_TraderItems'UnofficialModAssets.UMTraderItems'
 	UMTraderItemsBeta=KFGFxObject_TraderItems'UnofficialModAssets.UMTraderItemsBeta'
-	// NOTE: This is set early because the
-	// custom weapon dosh bug should be
-	// fixed in the next update
-	BetaCheckVersion=1082
+
+	BetaCheckVersion=1000000
 	MaxWeaponUpgradeCount=5
-	ModVersion="8"
+	ModVersion="8.1"
 
 	// Trader Inventory Mutator
 	CustomTraderHelperList.Add((ClassName=TIMut))
