@@ -125,7 +125,6 @@ simulated function CheckTraderListClient()
 simulated function ModifyTraderList()
 {
 	local KFGFxObject_TraderItems TraderItems;
-	//local class<KFWeapon> KFWClass;
 	local class<KFWeaponDefinition> OldWeapDef, NewWeapDef;
 	local array<KFGFxObject_TraderItems.STraderItem> TempTraderItem;
 	local bool bWeaponDefReplaced, bWeaponDefAlreadyExists;
@@ -159,17 +158,6 @@ simulated function ModifyTraderList()
 		// Check for version
 		if (!IsRelevantVersion(i))
 			continue;
-
-		// NOTE: This is no longer done as it prevents
-		// any potential issues if it somehow doesn't
-		// succeed on one end or the other
-		// Try to load this object
-		/*KFWClass = class<KFWeapon>(DynamicLoadObject(TraderModList[i].NewWeapDef.default.WeaponClassPath, class'Class'));
-		if (KFWClass == None)
-		{
-			`log("[Unofficial Mod]Could not load weapon path" @ TraderModList[i].NewWeapDef.default.WeaponClassPath @ "in definition class" @ TraderModList[i].NewWeapDef);
-			continue;
-		}*/
 
 		bWeaponDefReplaced = false;
 		bWeaponDefAlreadyExists = false;
@@ -329,12 +317,13 @@ static function KFGFxObject_TraderItems GetCustomTraderItems(array< class<KFWeap
 {
 	local KFGFxObject_TraderItems DefaultTraderItems, CustomTraderItems;
 	local array<KFGFxObject_TraderItems.STraderItem> TempTraderItem;
-	local int i, j, Index;
+	local int i, j, Index, KFVersion;
 	local bool bEnabled;
 	local array<string> ClassPathParts;
 
-	DefaultTraderItems = class'KFGame.KFGameReplicationInfo'.default.TraderItems;
+	DefaultTraderItems = class'UnofficialMod.UMClientConfig'.static.GetDefaultTraderItems();
 	CustomTraderItems = new class'KFGame.KFGFxObject_TraderItems';
+	KFVersion = class'KFGame.KFGameEngine'.static.GetKFGameVersion();
 	
 	for (i = 0;i < DefaultTraderItems.SaleItems.Length;i++)
 	{
@@ -345,7 +334,10 @@ static function KFGFxObject_TraderItems GetCustomTraderItems(array< class<KFWeap
 		{
 			bEnabled = true;
 			
-			if (DisabledWeapons.Length > 0 && default.TraderModList[Index].bAffectsGameplay)
+			// Check version first
+			if (KFVersion < default.TraderModList[Index].MinVersion || KFVersion > default.TraderModList[Index].MaxVersion)
+				bEnabled = false;
+			else if (DisabledWeapons.Length > 0 && default.TraderModList[Index].bAffectsGameplay)
 			{
 				ParseStringIntoArray(default.TraderModList[Index].NewWeapDef.default.WeaponClassPath, ClassPathParts, ".", true);
 				
@@ -454,4 +446,6 @@ defaultproperties
 	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_IonThruster_UM',ReplWeapDef=class'KFGame.KFWeapDef_IonThruster',MinVersion=1082))
 	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_ChiappaRhino_UM',ReplWeapDef=class'KFGame.KFWeapDef_ChiappaRhino',MinVersion=1082))
 	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_ChiappaRhinoDual_UM',ReplWeapDef=class'KFGame.KFWeapDef_ChiappaRhinoDual',MinVersion=1082))
+	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_G18_UM',ReplWeapDef=class'KFGame.KFWeapDef_G18',MinVersion=1090))
+	TraderModList.Add((NewWeapDef=class'UnofficialMod.KFWeapDef_MosinNagant_UM',ReplWeapDef=class'KFGame.KFWeapDef_MosinNagant',MinVersion=1090))
 }

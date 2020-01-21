@@ -39,15 +39,17 @@ simulated function SetPickupMesh(PrimitiveComponent NewPickupMesh)
 {
 	super.SetPickupMesh(NewPickupMesh);
 
-	// We wait for a little bit because dual
-	// weapons call this before updating their
-	// ammo counts for the dropped single
 	if (Role == ROLE_Authority)
 	{
+		// We wait for a little bit because dual
+		// weapons call this before updating their
+		// ammo counts for the dropped single
 		SetTimer(0.2, false, nameof(UpdateInformation));
 		
 		OriginalOwner = PickupTracker.RegisterDroppedPickup(Self, PlayerController(Instigator.Controller));
-		OriginalOwnerPlayerName = OriginalOwner.GetHumanReadableName();
+		// Not in solo unless debug is enabled
+		if (WorldInfo.NetMode != NM_Standalone || (UnofficialModMut(PickupTracker.Owner) != None && UnofficialModMut(PickupTracker.Owner).bDebugUM))
+			OriginalOwnerPlayerName = OriginalOwner.GetHumanReadableName();
 	}
 }
 
@@ -74,7 +76,7 @@ state FadeOut
 }
 
 /** Updates weapon information */
-simulated function UpdateInformation()
+function UpdateInformation()
 {
 	local KFWeapon KFW;
 
@@ -106,18 +108,7 @@ simulated function UpdateInformation()
 }
 
 /** Custom information for weapons that need it */
-function CustomUpdateInfo(KFWeapon KFW)
-{
-	// Dedicated Server specific
-	if (WorldInfo.NetMode == NM_DedicatedServer)
-	{
-		// Weapons with server-tracked alt-ammo (M16-M203, HM-501)
-		if (KFWeap_AssaultRifle_M16M203(KFW) != None)
-			SpareAmmo[1] = KFWeap_AssaultRifle_M16M203(KFW).ServerTotalAltAmmo - MagazineAmmo[1];
-		else if (KFWeap_AssaultRifle_MedicRifleGrenadeLauncher(KFW) != None)
-			SpareAmmo[1] = KFWeap_AssaultRifle_MedicRifleGrenadeLauncher(KFW).ServerTotalAltAmmo - MagazineAmmo[1];
-	}
-}
+function CustomUpdateInfo(KFWeapon KFW);
 
 /** Get ammo text for this weapon */
 simulated function string GetAmmoText()

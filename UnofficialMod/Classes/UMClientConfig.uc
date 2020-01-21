@@ -76,6 +76,13 @@ var globalconfig bool bDisableZedTimeDesaturationFilter;
 	weapons regardless of server settings */
 var globalconfig bool bAllowFriendWeaponsPickup;
 
+/** Medic weapon charge HUD position
+	So far only 0 (bottom left) and 1 (bottom right) */
+var globalconfig byte HMTechChargeHUDPos;
+
+/** Show server settings in chat box */
+var globalconfig bool bDisplayServerSettings;
+
 /** Replicated server-side config settings */
 
 /** Disable weapon upgrades */
@@ -352,6 +359,14 @@ simulated function SetupConfig()
 		bAllowFriendWeaponsPickup = true;
 		bSaveConfig = true;
 	}
+	
+	if (INIVersion < 5)
+	{
+		INIVersion = 5;
+		HMTechChargeHUDPos = 0;
+		bDisplayServerSettings = true;
+		bSaveConfig = true;
+	}
 
 	if (bSaveConfig)
 		SaveConfig();
@@ -382,6 +397,9 @@ simulated function CheckLocalPC()
 	// Give this time to get all replicated variables
 	if (WorldInfo.NetMode != NM_DedicatedServer)
 	{
+		// Setup the delegate
+		if (bDisplayServerSettings)
+			AddChatMessage = AddChatMessage_ChatBoxes;
 		SetTimer(2.0, false, nameof(NotifyServerSettings));
 		SetTimer(2.0, false, nameof(CheckHUD));
 
@@ -425,6 +443,9 @@ simulated function SendAllowFriendPickup()
 {
 	TheKFPC.ConsoleCommand("Mutate UMAllowFriendPickup" @ bAllowFriendWeaponsPickup);
 }
+
+/** Adds a chat message */
+delegate AddChatMessage(string ChatMessage);
 
 /** Notify clients of server settings */
 simulated function NotifyServerSettings()
@@ -521,15 +542,49 @@ simulated function NotifyServerSettings()
 		AddChatMessage("-Localization file NOT found. Workaround for Trader items implemented; other localization will not work.");
 		AddChatMessage("--Check Steam workshop page for more info.");
 	}
-	
-	bNotifyServerSettings = true;
+
+	if (!bNotifyServerSettings)
+	{
+		bNotifyServerSettings = true;
+		// After the initial call, we set AddChatMessage
+		// for the chat boxes because some future notifies
+		// depend on the chat boxes being available
+		if (AddChatMessage == None)
+			AddChatMessage = AddChatMessage_ChatBoxes;
+	}
+}
+
+/** Notify client of server settings via console
+	Called from console command */
+simulated function NotifyServerSettings_Console()
+{
+	local delegate<AddChatMessage> OrigDelegate;
+
+	OrigDelegate = AddChatMessage;
+	AddChatMessage = AddChatMessage_Console;
+	NotifyServerSettings();
+	AddChatMessage = OrigDelegate;
 }
 
 /** Adds a message to the chat boxes (both lobby and in-game) */
-simulated function AddChatMessage(string ChatMessage)
+simulated function AddChatMessage_ChatBoxes(string ChatMessage)
 {
 	TheKFPC.MyGFxHUD.HudChatBox.AddChatMessage(ChatMessage, class'KFGame.KFLocalMessage'.default.EventColor);
 	TheKFPC.MyGFxManager.PartyWidget.PartyChatWidget.AddChatMessage(ChatMessage, class'KFGame.KFLocalMessage'.default.EventColor);
+}
+
+/** Adds a message to the console */
+simulated function AddChatMessage_Console(string ChatMessage)
+{
+	local Console GameConsole;
+	
+	GameConsole = class'Engine.Engine'.static.GetEngine().GameViewport.ViewportConsole;
+
+	if (GameConsole != None)
+		GameConsole.OutputTextLine(ChatMessage);
+	else
+		// Shouldn't happen
+		`warn("[Unofficial Mod]" $ ChatMessage);
 }
 
 /** Checks HUD to see if we need to use custom Interaction */
@@ -964,7 +1019,7 @@ static simulated function GetCustomSTraderItemFor(class<KFWeaponDefinition> KFWe
 	local array<KFGFxObject_TraderItems.STraderItem> TempTraderItem;
 	local int Index;
 
-	DefaultTI = class'KFGame.KFGameReplicationInfo'.default.TraderItems;
+	DefaultTI = GetDefaultTraderItems();
 
 	// Find the original item
 	Index = DefaultTI.SaleItems.Find('WeaponDef', KFWeapDef);
@@ -1002,6 +1057,12 @@ static simulated function string GetWeaponLocalization(string KeyName, class<KFW
 	}
 	
 	return WeaponString;
+}
+
+/** Get default TraderItems */
+static simulated function KFGFxObject_TraderItems GetDefaultTraderItems()
+{
+	return  (KFGFxObject_TraderItems(DynamicLoadObject(class'KFGame.KFGameReplicationInfo'.default.TraderItemsPath, class'KFGame.KFGFxObject_TraderItems')));
 }
 
 /** Get UMClientConfig instance */

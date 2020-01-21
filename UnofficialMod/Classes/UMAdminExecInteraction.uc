@@ -184,7 +184,7 @@ function class<KFWeaponDefinition> FindWeaponDef(string SearchString, string Com
 	// but the unimplemented Horde Weekly has a Trader list
 	// with one item in it (the single 9mm pistol)
 	if (TraderItems == None || TraderItems.SaleItems.Length < 2)
-		TraderItems = class'KFGame.KFGameReplicationInfo'.default.TraderItems;
+		TraderItems = class'UnofficialMod.UMClientConfig'.static.GetDefaultTraderItems();
 
 	for (i = 0;i < TraderItems.SaleItems.Length;i++)
 	{

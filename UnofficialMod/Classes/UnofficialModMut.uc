@@ -32,9 +32,6 @@ struct PickupWeaponRepl
 /** Pickup weapon replacements */
 var const array<PickupWeaponRepl> PickupWeaponReplList;
 
-/** Our Trader Items archetype */
-var const KFGFxObject_TraderItems UMTraderItems, UMTraderItemsBeta;
-
 /** Config version, incremented when new settings are
 	added so that config can be saved with new defaults*/
 var globalconfig int INIVersion;
@@ -207,6 +204,28 @@ struct CustomMutatorInfo
 /** List of custom mutator class paths */
 var const array<CustomMutatorInfo> CustomMutatorInfoList;
 
+/** Custom dropped pickup class for specific weapon types */
+struct CustomDroppedPickup
+{
+	/** Class name of weapon
+		NOTE: Dual-wieldable weapons
+		might need both the single and
+		dual versions, check case-by-case */
+	var name ClassName;
+	/** Dropped pickup class */
+	var class<KFDroppedPickup_UM> PickupClass;
+	
+	structdefaultproperties
+	{
+		// This should never be left empty in
+		// defaultproperties, but just in case
+		PickupClass=class'UnofficialMod.KFDroppedPickup_UM'
+	}
+};
+
+/** List of custom dropped pickup classes */
+var const array<CustomDroppedPickup> CustomDroppedPickupList;
+
 /** Beta version check (used for things
 	like Trader list for new beta weapons)
 	NOTE: This is set to a very high number
@@ -221,6 +240,9 @@ var const string ModVersion;
 
 /** Cached value for IsInBeta() */
 var bool bIsInBeta;
+
+/** Debug */
+var bool bDebugUM;
 
 event PostBeginPlay()
 {
@@ -354,6 +376,7 @@ function bool CheckReplacement(Actor Other)
 	local KFWeapon KFW;
 	local KFGameReplicationInfo KFGRI;
 	local KFDroppedPickup_UM KFDP;
+	local int i;
 
 	KFPC = KFPlayerController(Other);
 	
@@ -365,7 +388,19 @@ function bool CheckReplacement(Actor Other)
 	// We only replace if this is the default because
 	// carryable objectives use their own pickup class
 	if (KFW != None && KFW.DroppedPickupClass == class'KFGame.KFDroppedPickup')
+	{
+		// Default first
 		KFW.DroppedPickupClass = class'UnofficialMod.KFDroppedPickup_UM';
+
+		for (i = 0;i < CustomDroppedPickupList.Length;i++)
+		{
+			if (KFW.IsA(CustomDroppedPickupList[i].ClassName))
+			{
+				KFW.DroppedPickupClass = CustomDroppedPickupList[i].PickupClass;
+				break;
+			}
+		}
+	}
 
 	KFDP = KFDroppedPickup_UM(Other);
 	
@@ -600,21 +635,6 @@ function Mutate(string MutateString, PlayerController Sender)
 			// Test Trader time extension
 			ExtendTraderTime();
 		}
-		else if (MutateString ~= "UMPerkKnife")
-		{
-			// Toggle Perk knife move speed option
-			/*if (ClientConfig.PerkKnifeSpeedBoostLevel == 1)
-				ClientConfig.PerkKnifeSpeedBoostLevel = 2;
-			else
-				ClientConfig.PerkKnifeSpeedBoostLevel = 1;
-
-			foreach WorldInfo.AllPawns(class'KFGame.KFPawn_Human', KFPH)
-			{
-				KFPH.UpdateGroundSpeed();
-			}
-			
-			ClientConfig.SpecialRepInfo.ForcePawnSpeedUpdate();*/
-		}
 		else if (MutateString ~= "UMMedicBat")
 		{
 			// Remove dart ammo from Hemoclobber
@@ -683,7 +703,12 @@ function Mutate(string MutateString, PlayerController Sender)
 				KFTT.OpenTrader();
 			}
 		}
-
+		else if (MutateString ~= "UMDebug")
+		{
+			// Debug mode
+			bDebugUM = !bDebugUM;
+			Sender.TeamMessage(Sender.PlayerReplicationInfo, "<Unofficial Mod>Debug is" @ (bDebugUM ? "ENABLED" : "DISABLED"), 'Event');
+		}
 	}
 	
 	if (WorldInfo.NetMode == NM_Standalone || Sender.PlayerReplicationInfo.bAdmin)
@@ -742,28 +767,6 @@ function Mutate(string MutateString, PlayerController Sender)
 			// to the server settings
 			BroadcastSystemMessage(UMSMT_KickFailedVoteInit, int(bool(StringParts[1])),, Sender);
 		}
-		/*else if (StringParts[0] ~= "UMPerkKnifeSpeedBoostLevel")
-		{
-			// Enforce proper values
-			IntSetting = int(StringParts[1]);
-			if (IntSetting < 0 || IntSetting > 2)
-				IntSetting = 0;
-				
-			PerkKnifeSpeedBoostLevel = byte(IntSetting);
-			SaveConfig();
-			
-			// Put this into effect immediately
-			ClientConfig.PerkKnifeSpeedBoostLevel = PerkKnifeSpeedBoostLevel;
-
-			foreach WorldInfo.AllPawns(class'KFGame.KFPawn_Human', KFPH)
-			{
-				KFPH.UpdateGroundSpeed();
-			}
-			
-			ClientConfig.SpecialRepInfo.ForcePawnSpeedUpdate();
-
-			BroadcastSystemMessage(UMSMT_PerkKnifeSpeedBoost, IntSetting);
-		}*/
 		else if (StringParts[0] ~= "UMMidGameJoinerTraderTime")
 		{
 			// Enforce proper values
@@ -952,9 +955,7 @@ function Mutate(string MutateString, PlayerController Sender)
 				FriendPRIInfoList.Length = FoundIndex + 1;
 				FriendPRIInfoList[FoundIndex].PRI = Sender.PlayerReplicationInfo;
 			}
-			
-			// TODO: Check if string representation of UniqueNetId can have spaces (doesn't appear to)
-			//StringParts[1] = Split(MutateString, " ", true);
+
 			class'Engine.OnlineSubsystem'.static.StringToUniqueNetId(StringParts[1], UniqueID);
 			foreach WorldInfo.GRI.PRIArray(PRI)
 			{
@@ -977,9 +978,7 @@ function Mutate(string MutateString, PlayerController Sender)
 				FriendPRIInfoList.Length = FoundIndex + 1;
 				FriendPRIInfoList[FoundIndex].PRI = Sender.PlayerReplicationInfo;
 			}
-			
-			// TODO: Check if string representation of UniqueNetId can have spaces (doesn't appear to)
-			//StringParts[1] = Split(MutateString, " ", true);
+
 			class'Engine.OnlineSubsystem'.static.StringToUniqueNetId(StringParts[1], UniqueID);
 			foreach WorldInfo.GRI.PRIArray(PRI)
 			{
@@ -1103,7 +1102,6 @@ function SetupConfig()
 	if (INIVersion < 4)
 	{
 		INIVersion = 4;
-		//PerkKnifeSpeedBoostLevel = 0;
 		MidGameJoinerTraderTime = 30;
 		DefaultWeaponUpgradeLevel = default.MaxWeaponUpgradeCount;
 		WeaponUpgradeOverrides.Length = 1;
@@ -1187,7 +1185,6 @@ function SetupConfig()
 	ClientConfig.bStartWithoutTier1Weapons = bStartWithoutTier1Weapons;
 	ClientConfig.bKF1StyleSyringe = bKF1StyleSyringe;
 	ClientConfig.bDisableRandomMapObjectives = bDisableRandomMapObjectives;
-	//ClientConfig.PerkKnifeSpeedBoostLevel = PerkKnifeSpeedBoostLevel;
 	ClientConfig.MidGameJoinerTraderTime = MidGameJoinerTraderTime;
 	ClientConfig.DefaultWeaponUpgradeLevel = DefaultWeaponUpgradeLevel;
 	ClientConfig.bDisableOthersWeaponsPickup = bDisableOthersWeaponsPickup;
@@ -1250,13 +1247,10 @@ function CheckTraderItems()
 	
 	// If another mod has changed this, then
 	// don't override, just log and exit
-	if (MyKFGI.MyKFGRI.TraderItems == class'KFGame.KFGameReplicationInfo'.default.TraderItems)
+	if (PathName(MyKFGI.MyKFGRI.TraderItems) ~= class'KFGame.KFGameReplicationInfo'.default.TraderItemsPath)
 	{
-		MyKFGI.MyKFGRI.TraderItems = GetTraderItems();
-		// Normally you're not supposed to modify hard archetypes,
-		// but since it's our own archetype and the UMTraderItemsHelper
-		// ensures that everything is kept synched, it works here
-		TraderHelper = Spawn(class'UnofficialMod.UMTraderItemsHelper');
+		// Spawn the default Trader Helper class
+		TraderHelper = Spawn(class'UnofficialMod.UMTraderItemsHelper_Default');
 	}
 	else if (IsCompatibleTraderItemsMod(TraderHelperClass))
 		TraderHelper = Spawn(TraderHelperClass);
@@ -1425,15 +1419,6 @@ function ReplaceWeaponPickup(class<KFWeapon> OldWeaponClass, class<KFWeapon> New
 	}
 }
 
-/** Get proper TraderItems instance based on KF2 version (used for beta) */
-function KFGFxObject_TraderItems GetTraderItems()
-{
-	if (IsInBeta())
-		return UMTraderItemsBeta;
-		
-	return UMTraderItems;
-}
-
 /** Get 9mm/Dual 9mm from player's inventory */
 static function KFWeapon Get9MMPistol(KFInventoryManager KFIM)
 {
@@ -1585,12 +1570,10 @@ function bool CheckFriendPickup(PlayerReplicationInfo OwnerPRI, PlayerReplicatio
 defaultproperties
 {
 	ClientConfigClass=class'UnofficialMod.UMClientConfig'
-	UMTraderItems=KFGFxObject_TraderItems'UnofficialModAssets.UMTraderItems'
-	UMTraderItemsBeta=KFGFxObject_TraderItems'UnofficialModAssets.UMTraderItemsBeta'
 
 	BetaCheckVersion=1000000
 	MaxWeaponUpgradeCount=5
-	ModVersion="8.1"
+	ModVersion="9"
 
 	// Trader Inventory Mutator
 	CustomTraderHelperList.Add((ClassName=TIMut))
@@ -1612,19 +1595,11 @@ defaultproperties
 	Tier1Weapons(7)=class'KFGameContent.KFWeap_Shotgun_MB500'
 	Tier1Weapons(8)=class'KFGameContent.KFWeap_SMG_MP7'
 
-	// NOTE: Modified 9mm/Dual 9mm pistols removed due to
-	// too many hard-coded 'KFWeap_Pistol_9mm' making this
-	// very difficult if not impossible to get working properly
-	// Only thing I wanted to do was increase total ammo
-	// to 120 anyways so no big loss
 	// Starting weapon replacements
-	//StartWeaponReplList(0)=(OldWeaponName=KFWeap_Pistol_9mm, NewWeaponClass=class'UnofficialMod.KFWeap_Pistol_9mm_UM')
-	//StartWeaponReplList(1)=(OldWeaponName=KFWeap_Pistol_Dual9mm, NewWeaponClass=class'UnofficialMod.KFWeap_Pistol_Dual9mm_UM')
 	StartWeaponReplList(0)=(OldWeaponName=KFWeap_GrenadeLauncher_HX25, NewWeaponClass=class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM')
 
 	// Pickup weapon replacements
-	//PickupWeaponReplList(0)=(OldWeaponClass=class'KFGameContent.KFWeap_Pistol_9mm', NewWeaponClass=class'UnofficialMod.KFWeap_Pistol_9mm_UM')
-	// NOTE: None of the vanilla item pickup factories have these weapons (as of v1075),
+	// NOTE: None of the vanilla item pickup factories have these weapons (as of v1089),
 	// but we have them here for custom maps and mods that might use them
 	//PickupWeaponReplList()=(OldWeaponClass=class'KFGameContent.', NewWeaponClass=class'UnofficialMod.')
 	PickupWeaponReplList(0)=(OldWeaponClass=class'KFGameContent.KFWeap_AssaultRifle_M16M203', NewWeaponClass=class'UnofficialMod.KFWeap_AssaultRifle_M16M203_UM')
@@ -1634,4 +1609,10 @@ defaultproperties
 	PickupWeaponReplList(4)=(OldWeaponClass=class'KFGameContent.KFWeap_Thrown_C4', NewWeaponClass=class'UnofficialMod.KFWeap_Thrown_C4_UM')
 	PickupWeaponReplList(5)=(OldWeaponClass=class'KFGameContent.KFWeap_GrenadeLauncher_HX25', NewWeaponClass=class'UnofficialMod.KFWeap_GrenadeLauncher_HX25_UM')
 	PickupWeaponReplList(6)=(OldWeaponClass=class'KFGameContent.KFWeap_AssaultRifle_MedicRifleGrenadeLauncher', NewWeaponClass=class'UnofficialMod.KFWeap_AssaultRifle_MedicRifleGrenadeLauncher_UM')
+	
+	// Custom dropped pickup classes
+	// TODO: Re-enable Ion Thruster when TWI fixes bug where weapon loses ultimate charge when dropped
+	//CustomDroppedPickupList.Add((ClassName=KFWeap_Edged_IonThruster, PickupClass=class'UnofficialMod.KFDroppedPickup_UM_IonThruster'))
+	CustomDroppedPickupList.Add((ClassName=KFWeap_AssaultRifle_M16M203, PickupClass=class'UnofficialMod.KFDroppedPickup_UM_ServerAltAmmo'))
+	CustomDroppedPickupList.Add((ClassName=KFWeap_AssaultRifle_MedicRifleGrenadeLauncher, PickupClass=class'UnofficialMod.KFDroppedPickup_UM_ServerAltAmmo'))
 }

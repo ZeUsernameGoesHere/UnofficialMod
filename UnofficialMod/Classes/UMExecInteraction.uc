@@ -220,7 +220,7 @@ function string FindWeaponPath(string SearchString)
 	
 	// Use default if we don't have a TraderItems right now
 	if (TraderItems == None || TraderItems.SaleItems.Length == 0)
-		TraderItems = class'KFGame.KFGameReplicationInfo'.default.TraderItems;
+		TraderItems = class'UnofficialMod.UMClientConfig'.static.GetDefaultTraderItems();
 		
 	for (i = 0;i < TraderItems.SaleItems.Length;i++)
 	{
@@ -454,10 +454,31 @@ exec function UMAllowFriendWeaponsPickup(bool bEnable)
 		ClientConfig.SendAllowFriendPickup();
 }
 
+/** HMTech charge HUD position */
+exec function UMHMTechChargeHUDPos(byte HUDPos)
+{
+	// The HUDHelper validates this value
+	ClientConfig.HMTechChargeHUDPos = ClientConfig.HUDHelper.SetupMedicWeaponPosInfo(HUDPos);
+	ClientConfig.SaveConfig();
+}
+
+/** Display server settings on load */
+exec function UMDisplayServerSettings(bool bEnable)
+{
+	ClientConfig.bDisplayServerSettings = bEnable;
+	ClientConfig.SaveConfig();
+}
+
 /** Show Unofficial Mod version in console */
 exec function UMVersion()
 {
 	ConsoleMsg("[Unofficial Mod] Version" @ class'UnofficialMod.UnofficialModMut'.default.ModVersion);
+}
+
+/** Show server settings in console */
+exec function UMServerSettings()
+{
+	ClientConfig.NotifyServerSettings_Console();
 }
 
 defaultproperties

@@ -40,7 +40,7 @@ static function int CreateTraderWeaponUpgradeConfig(KFGameReplicationInfo KFGRI)
 	default.WeaponUpgrades.Length = 0;
 	
 	// Go through default Trader inventory first
-	TraderItems = class'KFGame.KFGameReplicationInfo'.default.TraderItems;
+	TraderItems = class'UnofficialMod.UMClientConfig'.static.GetDefaultTraderItems();
 	
 	for (i = 0;i < TraderItems.SaleItems.Length;i++)
 	{

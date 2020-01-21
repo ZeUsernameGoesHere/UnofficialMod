@@ -66,6 +66,12 @@ var const float MedicWeaponHeight;
 /** Colors used for HMTech Medic weapon recharge
 	depending on whether a dart can be fired */
 var const color MedicWeaponNotChargedColor, MedicWeaponChargedColor;
+/** Positions for HMTech Medic weapon icons
+	depending on UMClientConfig.HMTechChargeHUDPos
+	Vectors are (X, Y, Position Offset) */
+var const array<vector> MedicWeaponPositions;
+/** Index for MedicWeaponPositions */
+var byte MedicWeaponPosIndex;
 
 /** M203/HM-501 reload indicator icon and background texture */
 var const Texture2D GrenadeReloadTexture;
@@ -107,7 +113,7 @@ struct MedicWeaponDartChargeInfo
 /** List of minimum dart charge per weapon */
 var array<MedicWeaponDartChargeInfo> MedicWeaponDartInfoList;
 
-simulated event PostBeginPlay()
+event PostBeginPlay()
 {
 	super.PostBeginPlay();
 	
@@ -120,11 +126,12 @@ simulated event PostBeginPlay()
 		TheKFPC = ClientConfig.GetLocalPC();
 		SetTimer(0.1, true, nameof(CheckForWeaponPickup));
 		SetupMedicDartInfo();
+		SetupMedicWeaponPosInfo(ClientConfig.HMTechChargeHUDPos);
 	}
 }
 
 /** Simulate zed time counting down */
-simulated event Tick(float DeltaTime)
+event Tick(float DeltaTime)
 {
 	super.Tick(DeltaTime);
 
@@ -133,7 +140,7 @@ simulated event Tick(float DeltaTime)
 }
 
 /** Draw relevant HUD stuff */
-simulated function DrawHUD(HUD H, Canvas C)
+function DrawHUD(HUD H, Canvas C)
 {
 	local KFPawn LockPawn;
 	local color LockColor;
@@ -167,7 +174,7 @@ simulated function DrawHUD(HUD H, Canvas C)
 }
 
 /** Check for dropped weapon pickup */
-simulated function CheckForWeaponPickup()
+function CheckForWeaponPickup()
 {
 	local KFDroppedPickup_UM KFDP, BestKFDP;
 	local int KFDPCount, ZedCount;
@@ -288,19 +295,19 @@ function bool GetLockedOnPlayer(KFWeapon KFW, out KFPawn LockPawn, out color Loc
 		
 		return (LockPawn != None);
 	}
-	else if (KFW.MedicComp != None && KFW.TargetingComp != None && (KFW.TargetingComp.TargetPlayers[0] != 0 || KFW.TargetingComp.TargetPlayers[1] != 0))
+	else if (KFW.MedicComp != None && KFW.TargetingComp != None &&
+		((KFW.TargetingComp.TargetingModeFlags[0] & class'KFGame.KFTargetingWeaponComponent'.const.TARGETINGMODE_FLAGS_PLAYER) != 0 ||
+		(KFW.TargetingComp.TargetingModeFlags[1] & class'KFGame.KFTargetingWeaponComponent'.const.TARGETINGMODE_FLAGS_PLAYER) != 0))
 	{
 		// General Medic weapon
-		// NOTE: There are no current vanilla weapons with this setup,
-		// so we check both TargetPlayers values just in case
-		if (KFW.TargetingComp.LockedTarget != None)
+		if (KFW.TargetingComp.LockedTarget[ETargetingMode_Player] != None)
 		{
-			LockPawn = KFW.TargetingComp.LockedTarget;
+			LockPawn = KFW.TargetingComp.LockedTarget[ETargetingMode_Player];
 			LockColor = MedicLockOnColor;
 		}
-		else if (KFW.TargetingComp.PendingLockedTarget != None)
+		else if (KFW.TargetingComp.PendingLockedTarget[ETargetingMode_Player] != None)
 		{
-			LockPawn = KFW.TargetingComp.PendingLockedTarget;
+			LockPawn = KFW.TargetingComp.PendingLockedTarget[ETargetingMode_Player];
 			LockColor = MedicPendingLockOnColor;
 		}
 
@@ -311,7 +318,7 @@ function bool GetLockedOnPlayer(KFWeapon KFW, out KFPawn LockPawn, out color Loc
 }
 
 /** Draw HMTech Medic weapon lock-on */
-simulated function DrawMedicWeaponLockOn(HUD H, Canvas C, KFPawn CurrentActor, color IconColor)
+function DrawMedicWeaponLockOn(HUD H, Canvas C, KFPawn CurrentActor, color IconColor)
 {
 	local vector ScreenPos;
 	local float IconSize;
@@ -330,9 +337,9 @@ simulated function DrawMedicWeaponLockOn(HUD H, Canvas C, KFPawn CurrentActor, c
 }
 
 /** Setup Medic weapon dart charge info */
-simulated function SetupMedicDartInfo()
+function SetupMedicDartInfo()
 {
-	local int i, j, DartCharge;
+	local int i, j; //, DartCharge;
 	local KFGFxObject_TraderItems TraderItems;
 	local class<KFWeapon> WeaponClass;
 	local KFWeapon MedicWeapon;
@@ -346,7 +353,7 @@ simulated function SetupMedicDartInfo()
 	}
 
 	// Check default TraderItems first
-	TraderItems = class'KFGame.KFGameReplicationInfo'.default.TraderItems;
+	TraderItems = class'UnofficialMod.UMClientConfig'.static.GetDefaultTraderItems();
 	
 	for (i = 0;i < 2;i++)
 	{
@@ -362,8 +369,8 @@ simulated function SetupMedicDartInfo()
 				continue;
 				
 			// Load this class
-			// NOTE: We use KFWeapon instead of KFWeap_MedicBase
-			// because the Hemoclobber extends KFWeap_MeleeBase
+			// NOTE: We use KFWeapon as several Medic
+			// weapons do not extend KFWeap_MedicBase
 			WeaponClass = class<KFWeapon>(DynamicLoadObject(TraderItems.SaleItems[j].WeaponDef.default.WeaponClassPath, class'Class', true));
 
 			// Second check excludes HM-501 and any other non-recharging Medic weapons
@@ -379,6 +386,8 @@ simulated function SetupMedicDartInfo()
 			}
 			else
 			{
+				DartInfo.KFWClass = WeaponClass;
+
 				// We have to get the minimum charge this
 				// way because AmmoCost is protected
 				MedicWeapon = Spawn(WeaponClass);
@@ -386,34 +395,15 @@ simulated function SetupMedicDartInfo()
 				// Shouldn't happen, but check anyways
 				if (MedicWeapon == None)
 				{
-					`log("[Unofficial Mod]Couldn't spawn Medic weapon for class" @ WeaponClass);
-					continue;
+					// Flag this so that the Medic Weapon charge
+					// function can grab this on the fly
+					DartInfo.MinDartCharge = -1;
 				}
-
-				// Go up by 10, then down by 1
-				// This minimizes the number of cycles
-				// while ensuring that any Medic weapon
-				// with a dart charge not divisible by
-				// 10 has an accurate display in the HUD
-				for (DartCharge = 10;DartCharge <= (MedicWeapon.MagazineCapacity[1] + 10);DartCharge += 10)
+				else
 				{
-					MedicWeapon.AmmoCount[1] = DartCharge;
-					if (MedicWeapon.HasAmmo(1))
-						break;
+					DartInfo.MinDartCharge = GetMinDartCharge(MedicWeapon);
+					MedicWeapon.Destroy();
 				}
-				
-				while (DartCharge >= 0)
-				{
-					MedicWeapon.AmmoCount[1] = DartCharge - 1;
-					if (!MedicWeapon.HasAmmo(1))
-						break;
-						
-					DartCharge--;
-				}
-				
-				DartInfo.KFWClass = WeaponClass;
-				DartInfo.MinDartCharge = DartCharge;
-				MedicWeapon.Destroy();
 			}
 			
 			MedicWeaponDartInfoList.AddItem(DartInfo);
@@ -424,8 +414,53 @@ simulated function SetupMedicDartInfo()
 	}
 }
 
+/** Get minimum dart charge for Medic weapon */
+function int GetMinDartCharge(KFWeapon MedicWeapon)
+{
+	local int DartCharge, OrigCharge;
+
+	OrigCharge = MedicWeapon.AmmoCount[1];
+
+	// Go up by 10, then down by 1
+	// This minimizes the number of cycles
+	// while ensuring that any Medic weapon
+	// with a dart charge not divisible by
+	// 10 has an accurate display in the HUD
+	for (DartCharge = 10;DartCharge <= (MedicWeapon.MagazineCapacity[1] + 10);DartCharge += 10)
+	{
+		MedicWeapon.AmmoCount[1] = DartCharge;
+		if (MedicWeapon.HasAmmo(1))
+			break;
+	}
+	
+	while (DartCharge >= 0)
+	{
+		MedicWeapon.AmmoCount[1] = DartCharge - 1;
+		if (!MedicWeapon.HasAmmo(1))
+			break;
+			
+		DartCharge--;
+	}
+	
+	MedicWeapon.AmmoCount[1] = OrigCharge;
+	
+	return DartCharge;
+}
+
+/** Setup HMTech Medic weapon info position */
+function byte SetupMedicWeaponPosInfo(byte PosIndex)
+{
+	// Check for proper values
+	if (PosIndex > 1)
+		PosIndex = 0;
+		
+	MedicWeaponPosIndex = PosIndex;
+	
+	return PosIndex;
+}
+
 /** Draw unequipped HMTech Medic weapon recharge */
-simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
+function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 {
 	local KFWeapon KFW;
 	local int MedicWeaponCount, Index;
@@ -433,6 +468,7 @@ simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 	local float IconRatioX, IconRatioY, ChargePct, ChargeBaseY, WeaponBaseX;
 	local color ChargeColor;
 	local bool bHasAmmo;
+	local MedicWeaponDartChargeInfo DartInfo;
 	
 	if (P.InvManager == None)
 		return;
@@ -446,9 +482,9 @@ simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 	IconRatioY = C.SizeY / 1080.0;
 	IconHeight = MedicWeaponHeight * IconRatioY;
 	IconWidth = IconHeight / 2.0;
-	// Explicit values that we scale based on HUD resolution
-	IconBaseX = 300 * IconRatioX;
-	IconBaseY = 947 * IconRatioY;
+	// Position depends on client setting
+	IconBaseX = MedicWeaponPositions[MedicWeaponPosIndex].X * IconRatioX; //300 * IconRatioX;
+	IconBaseY = MedicWeaponPositions[MedicWeaponPosIndex].Y * IconRatioY; //947 * IconRatioY;
 
 	foreach P.InvManager.InventoryActors(class'KFGame.KFWeapon', KFW)
 	{
@@ -456,16 +492,18 @@ simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 		// Specific check for Hemoclobber needed because it
 		// extends KFWeap_MeleeBase and not KFWeap_MedicBase
 		// Also only for weapons with rechargeable darts
-		if ((!KFW.IsA('KFWeap_MedicBase') || KFW.bCanRefillSecondaryAmmo) && KFWeap_Blunt_MedicBat(KFW) == None
-			&& KFWeap_HRG_Healthrower(KFW) == None)
+		//if ((!KFW.IsA('KFWeap_MedicBase') || KFW.bCanRefillSecondaryAmmo) && KFWeap_Blunt_MedicBat(KFW) == None
+		//	&& KFWeap_HRG_Healthrower(KFW) == None)
+		if (KFW.GetWeaponPerkClass(class'KFGame.KFPerk_FieldMedic') != class'KFGame.KFPerk_FieldMedic' || KFW.bCanRefillSecondaryAmmo)
 			continue;
 
 		// Only if this is not our current weapon
 		if (KFW == P.Weapon)
 			continue;
 			
-		// To the right of the player's health/armor
-		WeaponBaseX = IconBaseX + (MedicWeaponCount * IconWidth * 1.2);
+		// Either to the right of the player's health/armor
+		// or to the left of ammo
+		WeaponBaseX = IconBaseX + (MedicWeaponCount * IconWidth * MedicWeaponPositions[MedicWeaponPosIndex].Z);
 
 		// Draw background
 		C.DrawColor = BackgroundColor;
@@ -484,13 +522,27 @@ simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 		// Find our required dart charge
 		Index = MedicWeaponDartInfoList.Find('KFWClass', KFW.class);
 		
-		if (Index != INDEX_NONE && MedicWeaponDartInfoList[Index].MinDartCharge > 0)
+		if (Index != INDEX_NONE)
 		{
-			// Draw lines for minimum charge
-			ChargePct = float(MedicWeaponDartInfoList[Index].MinDartCharge) / float(KFW.MagazineCapacity[1]);
-			ChargeBaseY = IconBaseY + IconHeight * (1.0 - ChargePct);
-			C.Draw2DLine(WeaponBaseX, ChargeBaseY, WeaponBaseX + IconWidth * 0.2, ChargeBaseY, WeaponIconColor);
-			C.Draw2DLine(WeaponBaseX + IconWidth * 0.8, ChargeBaseY, WeaponBaseX + IconWidth, ChargeBaseY, WeaponIconColor);
+			// Grab this on the fly if necessary
+			if (MedicWeaponDartInfoList[Index].MinDartCharge < 0)
+				MedicWeaponDartInfoList[Index].MinDartCharge = GetMinDartCharge(KFW);
+
+			if (MedicWeaponDartInfoList[Index].MinDartCharge > 0)
+			{
+				// Draw lines for minimum charge
+				ChargePct = float(MedicWeaponDartInfoList[Index].MinDartCharge) / float(KFW.MagazineCapacity[1]);
+				ChargeBaseY = IconBaseY + IconHeight * (1.0 - ChargePct);
+				C.Draw2DLine(WeaponBaseX, ChargeBaseY, WeaponBaseX + IconWidth * 0.2, ChargeBaseY, WeaponIconColor);
+				C.Draw2DLine(WeaponBaseX + IconWidth * 0.8, ChargeBaseY, WeaponBaseX + IconWidth, ChargeBaseY, WeaponIconColor);
+			}
+		}
+		else
+		{
+			// Compile this now, this will render next frame
+			DartInfo.KFWClass = KFW.class;
+			DartInfo.MinDartCharge = GetMinDartCharge(KFW);
+			MedicWeaponDartInfoList.AddItem(DartInfo);
 		}
 
 		// Draw weapon
@@ -505,7 +557,7 @@ simulated function DrawMedicWeaponRecharge(HUD H, Canvas C, Pawn P)
 }
 
 /** Draw dropped weapon pickup info */
-simulated function DrawWeaponPickupInfo(HUD H, Canvas C, KFDroppedPickup_UM KFDP, Pawn P)
+function DrawWeaponPickupInfo(HUD H, Canvas C, KFDroppedPickup_UM KFDP, Pawn P)
 {
 	local vector ScreenPos;
 	local bool bHasAmmo, bCanCarry;
@@ -518,6 +570,7 @@ simulated function DrawWeaponPickupInfo(HUD H, Canvas C, KFDroppedPickup_UM KFDP
 	local float AmmoTextWidth, WeightTextWidth, TextWidth, TextHeight, TextYOffset;
 	local float InfoBaseX, InfoBaseY;
 	local float BGX, BGY, BGWidth, BGHeight;
+	local float WeaponTextBGX, WeaponTextBGY;
 
 	// Lift this a bit off of the ground
 	ScreenPos = C.Project(KFDP.Location + vect(0,0,25));
@@ -612,6 +665,23 @@ simulated function DrawWeaponPickupInfo(HUD H, Canvas C, KFDroppedPickup_UM KFDP
 	C.SetPos(InfoBaseX + IconSize * 1.5, InfoBaseY + IconSize * 1.5 + TextYOffset);
 	C.DrawText(WeightText, , FontScale, FontScale, MyFontRenderInfo);
 	
+	// Weapon name
+	if (KFDP.InventoryClass.default.ItemName != "")
+	{
+		C.TextSize(KFDP.InventoryClass.default.ItemName, TextWidth, TextHeight, FontScale, FontScale);
+		
+		WeaponTextBGX = ScreenPos.X - (TextWidth * 0.5625);
+		WeaponTextBGY = BGY - TextHeight * 1.25;
+
+		C.DrawColor = class'KFGame.KFHUDBase'.default.PlayerBarBGColor;
+		C.SetPos(WeaponTextBGX, WeaponTextBGY);
+		C.DrawTile(BackgroundTexture, TextWidth * 1.125, TextHeight * 1.125, 0, 0, 32, 32);
+	
+		C.DrawColor = WeaponIconColor;
+		C.SetPos(WeaponTextBGX + TextWidth * 0.0625, WeaponTextBGY + TextHeight * 0.0625);
+		C.DrawText(KFDP.InventoryClass.default.ItemName, , FontScale, FontScale, MyFontRenderInfo);
+	}
+
 	// Owner's name
 	if (KFDP.OriginalOwnerPlayerName != "")
 	{
@@ -635,7 +705,7 @@ simulated function DrawWeaponPickupInfo(HUD H, Canvas C, KFDroppedPickup_UM KFDP
 }
 
 /** Draw no grenade loaded icon for M16-M203 and HM-501 */
-simulated function CheckAndDrawEmptySecondaryIcon(HUD H, Canvas C, KFWeapon KFW)
+function CheckAndDrawEmptySecondaryIcon(HUD H, Canvas C, KFWeapon KFW)
 {
 	local float IconWidth, IconX, IconY;
 
@@ -667,12 +737,12 @@ simulated function CheckAndDrawEmptySecondaryIcon(HUD H, Canvas C, KFWeapon KFW)
 
 // TODO: This
 /** Draw no explosive icon for Pulverizer */
-simulated function DrawNoExploIcon(HUD H, Canvas C, Texture2D NoExploTexture)
+function DrawNoExploIcon(HUD H, Canvas C, Texture2D NoExploTexture)
 {
 }
 
 /** Draw Zed Time extension HUD */
-simulated function DrawZedTimeHUD(HUD H, Canvas C)
+function DrawZedTimeHUD(HUD H, Canvas C)
 {
 	local float IconSize, IconX, IconY;
 	local float FontScale, TextWidth, TextHeight, TextBoxX, TextBoxY;
@@ -721,7 +791,7 @@ simulated function DrawZedTimeHUD(HUD H, Canvas C)
 
 /** Get custom Supplier color for passed KFPlayerReplicationInfo
 	Returns true if this is different than default */
-simulated function bool GetSupplierColor(KFPlayerReplicationInfo KFPRI, out color SupplierColor, optional bool bCheckDifferent)
+function bool GetSupplierColor(KFPlayerReplicationInfo KFPRI, out color SupplierColor, optional bool bCheckDifferent)
 {
 	local color OrigColor;
 
@@ -767,7 +837,7 @@ simulated function bool GetSupplierColor(KFPlayerReplicationInfo KFPRI, out colo
 }
 
 /** Checks if these two colors are different */
-simulated function bool IsDifferentColor(const out color A, const out color B)
+function bool IsDifferentColor(const out color A, const out color B)
 {
 	return (A.R != B.R || A.G != B.G || A.B != B.B || A.A != B.A);
 }
@@ -799,6 +869,9 @@ defaultproperties
 	MedicWeaponHeight=88
 	MedicWeaponNotChargedColor=(R=224, G=0, B=0, A=128)
 	MedicWeaponChargedColor=(R=0, G=224, B=224, A=128)
+	// Based off of 1920x1080 and scaled (Z is offset for each weapon displayed)
+	MedicWeaponPositions(0)=(X=300,Y=947,Z=1.2)
+	MedicWeaponPositions(1)=(X=1576,Y=947,Z=-1.2)
 	
 	GrenadeReloadTexture=Texture2D'UI_FireModes_TEX.UI_FireModeSelect_Grenade'
 	GrenadeReloadTextureColor=(R=192, G=192, B=192, A=192)
