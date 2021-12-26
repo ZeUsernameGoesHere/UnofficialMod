@@ -26,6 +26,8 @@ var const Texture2D BackgroundTexture;
 var const color BackgroundColor;
 /** General HUD text color */
 var const color TextColor;
+/** General HUD text outline color */
+var const color TextOutlineColor;
 /** General FontRenderInfo */
 var const FontRenderInfo MyFontRenderInfo;
 
@@ -745,8 +747,9 @@ function DrawNoExploIcon(HUD H, Canvas C, Texture2D NoExploTexture)
 function DrawZedTimeHUD(HUD H, Canvas C)
 {
 	local float IconSize, IconX, IconY;
-	local float FontScale, TextWidth, TextHeight, TextBoxX, TextBoxY;
+	local float FontScale, TextWidth, TextHeight, TextPosX, TextPosY;
 	local string ExtensionsString;
+	local int XS, YS, Steps, Size;
 
 	IconSize = WorldInfo.static.GetResolutionBasedHUDScale() * ZedTimeIconSize;
 	// Right above health/armor status area
@@ -764,28 +767,38 @@ function DrawZedTimeHUD(HUD H, Canvas C)
 	// Draw background icon
 	C.DrawColor = ZedTimeTextureBGColor;
 	C.SetPos(IconX, IconY);
-	C.DrawTile(ZedTimeTexture, IconSize, IconSize, 0, 0, 512, 512);
+	C.DrawTile(ZedTimeTexture, IconSize, IconSize, 0, 0, 128, 128);
 	
 	// Draw remaining zed time left
 	C.SetPos(IconX, IconY);
-	C.DrawTimer(ZedTimeTexture, 0.0, ZedTimeRemaining / ClientConfig.ZedTimeRemaining, IconSize, IconSize, 0, 0, 512, 512, ZedTimeTextureColor);
+	C.DrawTimer(ZedTimeTexture, 0.0, ZedTimeRemaining / ClientConfig.ZedTimeRemaining, IconSize, IconSize, 0, 0, 128, 128, ZedTimeTextureColor);
 	
 	// Setup extensions text
 	ExtensionsString = string(ClientConfig.ZedTimeExtensions);
 	FontScale = class'KFGame.KFGameEngine'.static.GetKFFontScale() * ZedTimeFontScale;
 	C.Font = class'KFGame.KFGameEngine'.static.GetKFCanvasFont();
 	C.TextSize(ExtensionsString, TextWidth, TextHeight, FontScale, FontScale);
-	TextBoxX = IconX + IconSize * 0.3125;
-	TextBoxY = IconY + IconSize * 0.3125;
+	
+	TextPosX = IconX + (IconSize - TextWidth) * 0.5;
+	TextPosY = IconY + (IconSize - TextHeight) * 0.5;
 
-	// Draw background for text
-	C.SetDrawColor(0, 0, 0, 255);
-	C.SetPos(TextBoxX, TextBoxY);
-	C.DrawTile(BackgroundTexture, IconSize * 0.375, IconSize * 0.375, 0, 0, 32, 32);
+	C.DrawColor = TextOutlineColor;
 
-	// Draw extensions text
+	Size = 2;
+	Steps = (Size * 2) / 3;
+	if (Steps < 1 ) Steps = 1;
+
+	for (XS = -Size; XS <= Size; XS+=Steps)
+	{
+		for (YS = -Size; YS <= Size; YS+=Steps)
+		{
+			C.SetPos(TextPosX + XS, TextPosY + YS);
+			C.DrawText(ExtensionsString, , FontScale, FontScale, MyFontRenderInfo);
+		}
+	}
+
 	C.DrawColor = TextColor;
-	C.SetPos(IconX + (IconSize - TextWidth) * 0.5, IconY + (IconSize - TextHeight) * 0.5);
+	C.SetPos(TextPosX, TextPosY);
 	C.DrawText(ExtensionsString, , FontScale, FontScale, MyFontRenderInfo);
 }
 
@@ -846,7 +859,8 @@ defaultproperties
 {
 	BackgroundTexture=Texture2D'EngineResources.WhiteSquareTexture'
 	BackgroundColor=(R=0, G=0, B=0, A=128)
-	TextColor=(R=192, G=192, B=192, A=192)
+	TextColor=(R=250, G=250, B=250, A=255)
+	TextOutlineColor=(R=25, G=25, B=25, A=255)
 	MyFontRenderInfo=(bClipText=true)
 
 	MedicLockOnIcon=Texture2D'UI_PerkIcons_TEX.UI_PerkIcon_Medic'
@@ -878,7 +892,7 @@ defaultproperties
 	GrenadeReloadLineColor=(R=255, G=0, B=0, A=192)
 	GrenadeReloadTextureWidth=64
 	
-	ZedTimeTexture=Texture2D'UI_HUD.InGameHUD_SWF_I15E'
+	ZedTimeTexture=Texture2D'UI_Award_PersonalMulti.UI_Award_PersonalMulti-Headshots'
 	ZedTimeTextureBGColor=(R=96, G=96, B=96, A=192)
 	ZedTimeTextureColor=(R=0.75, G=0.75, B=0.75, A=0.75)
 	ZedTimeIconSize=64
