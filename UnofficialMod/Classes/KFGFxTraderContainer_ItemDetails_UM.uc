@@ -38,7 +38,7 @@ function SetGenericItemDetails(const out STraderItem TraderItem, out GFxObject I
 {
 	local KFPerk CurrentPerk;
 	local int FinalMaxSpareAmmoCount;
-	local byte FinalMagazineCapacity;
+	local int FinalMagazineCapacity;
 	local Float DamageValue;
 	local Float NextDamageValue;
 	local KFGFxObject_TraderItems.STraderItem TempTraderItem;
