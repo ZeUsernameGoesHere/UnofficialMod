@@ -19,7 +19,7 @@ var int MaxFailedKickVoteAttempts;
 var bool bKickFailedVoteInitiator;
 
 /** Holds failed kick vote attempts */
-struct FailedKickVoteInfo extends sKickVoteInfo
+struct FailedKickVoteInfo extends sVoteInfo
 {
 	var int FailedAttempts;
 };
@@ -30,7 +30,7 @@ var array<FailedKickVoteInfo> FailedKickVotes;
 /** Current vote initiator
 	Ensures that this player can be properly tracked if
 	they leave before failing an attempt to kick vote */
-var sKickVoteInfo CurrentInitiator;
+var sVoteInfo CurrentInitiator;
 
 /** Copy/paste modified to show the vote initiator and
 	see if they have attempted too many kick votes */
@@ -103,23 +103,30 @@ function ServerStartVoteKick(PlayerReplicationInfo PRI_Kickee, PlayerReplication
 			}
 		}
 	}
+	
+	// A kick vote is not allowed while another vote is active
+	if (bIsSkipTraderVoteInProgress || bIsPauseGameVoteInProgress)
+	{
+		KFPC.ReceiveLocalizedMessage(class'KFLocalMessage', LMT_OtherVoteInProgress);
+		return;
+	}
 
-	if( !bIsVoteInProgress )
+	if( !bIsKickVoteInProgress )
 	{
 		// Clear voter array
 		PlayersThatHaveVoted.Length = 0;
 
 		// Cache off these values in case player leaves before vote ends -- no cheating!
-		CurrentVote.PlayerID = PRI_Kickee.UniqueId;
-		CurrentVote.PlayerPRI = PRI_Kickee;
-		CurrentVote.PlayerIPAddress = KickeePC.GetPlayerNetworkAddress();
+		CurrentKickVote.PlayerID = PRI_Kickee.UniqueId;
+		CurrentKickVote.PlayerPRI = PRI_Kickee;
+		CurrentKickVote.PlayerIPAddress = KickeePC.GetPlayerNetworkAddress();
 
 		// Also cache vote initiator for same reason
 		CurrentInitiator.PlayerID = PRI_Kicker.UniqueId;
 		CurrentInitiator.PlayerPRI = PRI_Kicker;
 		CurrentInitiator.PlayerIPAddress = KFPC.GetPlayerNetworkAddress();
 
-		bIsVoteInProgress = true;
+		bIsKickVoteInProgress = true;
 
 		GetKFPRIArray(PRIs);
 		for (i = 0; i < PRIs.Length; i++)
@@ -127,12 +134,12 @@ function ServerStartVoteKick(PlayerReplicationInfo PRI_Kickee, PlayerReplication
 			PRIs[i].ShowKickVote(PRI_Kickee, VoteTime, !(PRIs[i] == PRI_Kicker || PRIs[i] == PRI_Kickee));
 		}
 		// Replace with our own broadcast message showing who initiated the vote
-		KFGI.BroadcastLocalized(KFGI, class'UnofficialMod.UMLocalMessage', UMLMT_StartedKickVote, CurrentVote.PlayerPRI, CurrentInitiator.PlayerPRI);
+		KFGI.BroadcastLocalized(KFGI, class'UnofficialMod.UMLocalMessage', UMLMT_StartedKickVote, CurrentKickVote.PlayerPRI, CurrentInitiator.PlayerPRI);
 		SetTimer( VoteTime, false, nameof(ConcludeVoteKick), self );
 		// Cast initial vote
 		RecieveVoteKick(PRI_Kicker, true);
 	}
-	else if(PRI_Kickee == CurrentVote.PlayerPRI)
+	else if (PRI_Kickee == CurrentKickVote.PlayerPRI)
 	{
 		RecieveVoteKick(PRI_Kicker, false);
 	}
@@ -148,7 +155,6 @@ function ServerStartVoteKick(PlayerReplicationInfo PRI_Kickee, PlayerReplication
 	times and kick them if the config option is set */
 reliable server function ConcludeVoteKick()
 {
-	
 	local array<KFPlayerReplicationInfo> PRIs;
 	local int i, NumPRIs;
 	local KFGameInfo KFGI;
@@ -157,7 +163,7 @@ reliable server function ConcludeVoteKick()
 
 	KFGI = KFGameInfo(WorldInfo.Game);
 
-	if(bIsVoteInProgress)
+	if(bIsKickVoteInProgress)
 	{
 		GetKFPRIArray(PRIs);
 
@@ -169,7 +175,7 @@ reliable server function ConcludeVoteKick()
 		NumPRIs = PRIs.Length;
 
 		// Current Kickee PRI should not count towards vote percentage
-		if( PRIs.Find(CurrentVote.PlayerPRI) != INDEX_NONE )
+		if( PRIs.Find(CurrentKickVote.PlayerPRI) != INDEX_NONE )
 		{
 			NumPRIs--;
 		}
@@ -180,13 +186,13 @@ reliable server function ConcludeVoteKick()
 		if( YesVotes >= KickVotesNeeded )
 		{
 			// See if kicked player has left
-			if( CurrentVote.PlayerPRI == none || CurrentVote.PlayerPRI.bPendingDelete )
+			if( CurrentKickVote.PlayerPRI == none || CurrentKickVote.PlayerPRI.bPendingDelete )
 			{
 				for( i = 0; i < WorldInfo.Game.InactivePRIArray.Length; i++ )
 				{
-					if( WorldInfo.Game.InactivePRIArray[i].UniqueId == CurrentVote.PlayerID )
+					if( WorldInfo.Game.InactivePRIArray[i].UniqueId == CurrentKickVote.PlayerID )
 					{
-						CurrentVote.PlayerPRI = WorldInfo.Game.InactivePRIArray[i];
+						CurrentKickVote.PlayerPRI = WorldInfo.Game.InactivePRIArray[i];
 						break;
 					}
 				}
@@ -195,11 +201,11 @@ reliable server function ConcludeVoteKick()
 
 			if(KFGI.AccessControl != none)
 			{
-				KickedPC = ( (CurrentVote.PlayerPRI != none) && (CurrentVote.PlayerPRI.Owner != none) ) ? KFPlayerController(CurrentVote.PlayerPRI.Owner) : none;
-				KFAccessControl(KFGI.AccessControl).KickSessionBanPlayer(KickedPC, CurrentVote.PlayerID, KFGI.AccessControl.KickedMsg);
+				KickedPC = ( (CurrentKickVote.PlayerPRI != none) && (CurrentKickVote.PlayerPRI.Owner != none) ) ? KFPlayerController(CurrentKickVote.PlayerPRI.Owner) : none;
+				KFAccessControl(KFGI.AccessControl).KickSessionBanPlayer(KickedPC, CurrentKickVote.PlayerID, KFGI.AccessControl.KickedMsg);
 			}
 			//tell server to kick target PRI
-			KFGI.BroadcastLocalized(KFGI, class'KFLocalMessage', LMT_KickVoteSucceeded, CurrentVote.PlayerPRI);
+			KFGI.BroadcastLocalized(KFGI, class'KFLocalMessage', LMT_KickVoteSucceeded, CurrentKickVote.PlayerPRI);
 
 			// Increment number of kicked players this session
 			KickedPlayers++;
@@ -209,7 +215,7 @@ reliable server function ConcludeVoteKick()
 			//Set timer so that votes cannot be spammed
 			bIsFailedVoteTimerActive=true;
 			SetTimer( KFGI.TimeBetweenFailedVotes, false, nameof(ClearFailedVoteFlag), self );
-			KFGI.BroadcastLocalized(KFGI, class'KFLocalMessage', LMT_KickVoteFailed, CurrentVote.PlayerPRI);
+			KFGI.BroadcastLocalized(KFGI, class'KFLocalMessage', LMT_KickVoteFailed, CurrentKickVote.PlayerPRI);
 			
 			// Add vote initiator if needed
 			// NOTE: We now check this regardless
@@ -257,9 +263,9 @@ reliable server function ConcludeVoteKick()
 			}
 		}
 
-		bIsVoteInProgress = false;
-		CurrentVote.PlayerPRI = none;
-		CurrentVote.PlayerID = class'PlayerReplicationInfo'.default.UniqueId;
+		bIsKickVoteInProgress = false;
+		CurrentKickVote.PlayerPRI = none;
+		CurrentKickVote.PlayerID = class'PlayerReplicationInfo'.default.UniqueId;
 		CurrentInitiator.PlayerPRI = None;
 		CurrentInitiator.PlayerID = class'PlayerReplicationInfo'.default.UniqueId;
 		yesVotes = 0;
