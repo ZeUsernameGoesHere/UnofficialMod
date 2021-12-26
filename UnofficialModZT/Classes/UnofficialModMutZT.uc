@@ -2,7 +2,7 @@
 // UnofficialModMutZT
 //================================================
 // Mutator for Unofficial Mod
-// Modified for Zedternal compatibility
+// Modified for ZedternalReborn compatibility
 //================================================
 // (c) 2019 "Insert Name Here"
 //================================================
@@ -33,21 +33,21 @@ event PreBeginPlay()
 
 	super.PreBeginPlay();
 
-	// Replace Zedternal's default Trader items with our own
+	// Replace ZedternalReborn's default Trader items with our own
 	// This is a workaround for the fact that we replace
 	// vanilla weapons instead of adding new ones
 	// If we modify the trader list after the game starts,
-	// Zedternal weapon upgrades can be purchased but won't work
-	`log("[Unofficial Mod]Zedternal found, replacing weapons in Trader list...");
+	// ZedternalReborn weapon upgrades can be purchased but won't work
+	`log("[Unofficial Mod]ZedternalReborn found, replacing weapons in Trader list...");
 	DefaultTraderItems = class'UnofficialMod.UMTraderItemsHelper'.static.GetCustomTraderItems(GetDisabledUMWeapons());
 	WMGameInfo_Endless(WorldInfo.Game).DefaultTraderItems = DefaultTraderItems;
 
 	// Replace player starting weapons as needed
 	// This also replaces these weapons in pickup factories
 	TraderModList = class'UnofficialMod.UMTraderItemsHelper'.default.TraderModList;
-	for (i = 0;i < class'Zedternal.Config_Weapon'.default.Weapon_PlayerStartingWeaponDefList.Length;i++)
+	for (i = 0;i < class'ZedternalReborn.Config_WeaponStarting'.default.Weapon_StartingWeaponDef.Length;i++)
 	{
-		WeapDefStr = class'Zedternal.Config_Weapon'.default.Weapon_PlayerStartingWeaponDefList[i];
+		WeapDefStr = class'ZedternalReborn.Config_WeaponStarting'.default.Weapon_StartingWeaponDef[i];
 		// Only for vanilla WeaponDefs
 		if (Left(WeapDefStr, 7) ~= "KFGame.")
 		{
@@ -62,7 +62,7 @@ event PreBeginPlay()
 					WeapDefEntry.KFString = WeapDefStr;
 					WeapDefEntry.UMString = PathName(TraderModList[j].NewWeapDef);
 					ReplWeapDefStringList.AddItem(WeapDefEntry);
-					class'Zedternal.Config_Weapon'.default.Weapon_PlayerStartingWeaponDefList[i] = WeapDefEntry.UMString;
+					class'ZedternalReborn.Config_WeaponStarting'.default.Weapon_StartingWeaponDef[i] = WeapDefEntry.UMString;
 					break;
 				}
 			}
@@ -74,19 +74,19 @@ event PreBeginPlay()
 		SetTimer(1.0, false, nameof(RevertZTConfig));
 }
 
-/** Overridden because this is not necessary for Zedternal */
+/** Overridden because this is not necessary for ZedternalReborn */
 function CheckTraderItems();
 
-/** Reverts Zedternal config
+/** Reverts ZedternalReborn config
 	This is done because we modify the config before
 	it has a chance to check the mod's version
-	If Zedternal has updated, it'll save our values to
+	If ZedternalReborn has updated, it'll save our values to
 	its config, which is what we don't want */
 function RevertZTConfig()
 {
 	local int i, Index;
 
-	if (WMGameInfo_Endless(WorldInfo.Game).PerkStartingWeapon.Length == 0)
+	if (WMGameInfo_Endless(WorldInfo.Game).StartingWeapons.Length == 0)
 	{
 		SetTimer(1.0, false, nameof(RevertZTConfig));
 		return;
@@ -94,15 +94,15 @@ function RevertZTConfig()
 	
 	for (i = 0;i < ReplWeapDefStringList.Length;i++)
 	{
-		Index = class'Zedternal.Config_Weapon'.default.Weapon_PlayerStartingWeaponDefList.Find(ReplWeapDefStringList[i].UMString);
+		Index = class'ZedternalReborn.Config_WeaponStarting'.default.Weapon_StartingWeaponDef.Find(ReplWeapDefStringList[i].UMString);
 		if (Index != INDEX_NONE)
-			class'Zedternal.Config_Weapon'.default.Weapon_PlayerStartingWeaponDefList[Index] = ReplWeapDefStringList[i].KFString;
+			class'ZedternalReborn.Config_WeaponStarting'.default.Weapon_StartingWeaponDef[Index] = ReplWeapDefStringList[i].KFString;
 		else
 			`warn("[Unofficial Mod]Could not find replaced ZT WeaponDef" @ ReplWeapDefStringList[i].KFString @
 				"- UM WeaponDef =" @ ReplWeapDefStringList[i].UMString);
 	}
 
-	class'Zedternal.Config_Weapon'.static.StaticSaveConfig();
+	class'ZedternalReborn.Config_WeaponStarting'.static.StaticSaveConfig();
 	ReplWeapDefStringList.Length = 0;
 }
 
