@@ -83,7 +83,7 @@ var const Color GrenadeReloadTextureColor, GrenadeReloadLineColor;
 var const float GrenadeReloadTextureWidth;
 
 /** Zed time indicator texture */
-var const Texture2D ZedTimeTexture, ZedTimeTexture2;
+var const Texture2D ZedTimeTexture;
 /** Colors for Zed time texture */
 var const color ZedTimeTextureBGColor;
 var const LinearColor ZedTimeTextureColor;
